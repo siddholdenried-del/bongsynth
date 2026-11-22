@@ -1,8 +1,8 @@
-/* BongSynth · Ink. BongDrums' late-night desk, in the GhettoMachine's teal. */
-:root{color-scheme:dark;--sharp:1px;
-  --felt:#0F1A1E;--felt-hi:#16262C;--felt-lo:#081013;--cell:#25363C;--cell-hi:#30454C;
-  --cream:#FFE8B6;--cream-lo:#C9B07C;--dim:#9FB2A8;--blue:#55C9B4;--blue-lo:#2A8273;--amber:#FFC05C;--amber-lo:#B9802A;
-  --carmine:#DC453C;--carmine-lo:#8E2621;--ring:#5F8A86;--edge:#2F4A4E;
+/* BongSynth · Paper. BongDrums' Felt desk, inverted: its plum felt becomes the ink, its cream ink becomes the paper. */
+:root{color-scheme:light;--sharp:1px;
+  --felt:#FFE8B6;--felt-hi:#F7DBA2;--felt-lo:#DDBF84;--cell:#F0D295;--cell-hi:#E8C786;
+  --cream:#230E1B;--cream-lo:#5A2A44;--dim:#6E4A5C;--blue:#2F6C8E;--blue-lo:#1C445B;--amber:#9A5A12;--amber-lo:#5E360A;
+  --carmine:#B8322A;--carmine-lo:#701B16;--ring:#8C5A7C;--edge:#D2AE74;
   --mono:"Courier New",Courier,monospace;
   font:700 15px/1.25 var(--mono);color:var(--cream);background:var(--felt);text-transform:uppercase;letter-spacing:.04em}
 *{box-sizing:border-box}
@@ -18,8 +18,8 @@ kbd{font:700 .75rem var(--mono);border:1px solid var(--edge);border-bottom-width
 /* ---------- scanlines ---------- */
 .vhs{position:fixed;inset:0;pointer-events:none;z-index:0}
 .vhs i{position:absolute;inset:0}
-.vhs .lines{background:repeating-linear-gradient(0deg,#0000 0 2px,#0003 2px 3px);opacity:.6}
-.vhs .vig{background:radial-gradient(ellipse at center,#0000 55%,#000a 100%)}
+.vhs .lines{background:repeating-linear-gradient(0deg,#0000 0 2px,#230E1B14 2px 3px);opacity:.6}
+.vhs .vig{background:radial-gradient(ellipse at center,#0000 60%,#5A2A4433 100%)}
 body.fx-off .vhs{display:none}
 
 /* ---------- chunky controls ---------- */
@@ -43,7 +43,7 @@ option{color:var(--cream);background:var(--felt-lo)}
 /* ---------- frame ---------- */
 .app{position:relative;z-index:1;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:10px 18px 0}
 .bar{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem 1rem;padding:.2rem 0 .6rem;border-bottom:3px solid var(--cream);position:relative;z-index:5}
-.word{margin:0;font:700 clamp(1.5rem,2.6vw,2.3rem)/1 var(--mono);letter-spacing:.02em;text-shadow:2px 2px 0 var(--blue-lo)}
+.word{margin:0;font:700 clamp(1.5rem,2.6vw,2.3rem)/1 var(--mono);letter-spacing:.02em;text-shadow:2px 2px 0 var(--carmine)}
 .transport{display:flex;align-items:center;gap:.55rem;min-width:0}
 #play{min-width:7.2rem;font-size:1.05rem}
 #play[aria-pressed=true]{background:var(--amber);box-shadow:0 4px 0 var(--amber-lo)}
@@ -55,12 +55,12 @@ option{color:var(--cream);background:var(--felt-lo)}
 .modes{display:flex;align-items:center;margin-left:auto;gap:.9rem}
 .modes button{background:transparent;box-shadow:none;font-size:1.05rem;padding:.3rem .65rem;position:relative}
 .modes button+button::before{content:"|";position:absolute;left:-.75rem;opacity:.8;pointer-events:none}
-.modes button[aria-selected=true]{background:var(--carmine);box-shadow:0 4px 0 var(--carmine-lo)}
+.modes button[aria-selected=true]{background:var(--carmine);color:var(--felt);box-shadow:0 4px 0 var(--carmine-lo)}
 .menu{position:relative}
 .menu summary{list-style:none;cursor:pointer;padding:.25rem .55rem;border:2px solid var(--cream);font-size:1.1rem;box-shadow:0 3px 0 var(--felt-lo)}
 .menu summary::-webkit-details-marker{display:none}
 .menu[open] summary{background:var(--cream);color:var(--felt)}
-.menu-body{position:absolute;right:0;top:calc(100% + 10px);width:min(400px,92vw);max-height:calc(100dvh - 90px);overflow:auto;background:var(--felt-hi);border:2px solid var(--ring);padding:.6rem .9rem .9rem;box-shadow:0 18px 40px #000c;font-weight:400}
+.menu-body{position:absolute;right:0;top:calc(100% + 10px);width:min(400px,92vw);max-height:calc(100dvh - 90px);overflow:auto;background:var(--felt-hi);border:2px solid var(--ring);padding:.6rem .9rem .9rem;box-shadow:0 18px 40px #230E1B55;font-weight:400}
 .menu-body h2{font:700 .8rem var(--mono);letter-spacing:.14em;color:var(--amber);margin:.9rem 0 .35rem}
 .menu-body p{margin:.25rem 0;font-size:.72rem;color:var(--dim)}
 .menu-body a{color:var(--blue)}
@@ -96,7 +96,7 @@ body[data-view=sequence] .view[data-view=sequence],body[data-view=effects] .view
 .knobs.big .kl,.knobs.big .kv{font-size:clamp(.8rem,1.3vw,1.15rem)}
 .knob svg{width:100%;height:100%;overflow:visible;display:block}
 .knob .ticks line{stroke:var(--cream);stroke-width:1.6;stroke-dasharray:2 1.4}
-.knob .face{fill:#1E2E33;stroke:var(--ring);stroke-width:1.6}
+.knob .face{fill:var(--felt-hi);stroke:var(--ring);stroke-width:1.6}
 .knob .fill{fill:none;stroke:var(--amber);stroke-width:1.8;stroke-linecap:round;opacity:.6}
 .knob .ptr{stroke:var(--cream);stroke-width:3.4}
 .knob .kv{font-size:.8rem;color:var(--cream);white-space:nowrap;font-variant-numeric:tabular-nums;min-height:1.2em}
@@ -126,7 +126,7 @@ body[data-view=sequence] .view[data-view=sequence],body[data-view=effects] .view
 .step.off .note{opacity:.35}
 .step .arrows{display:flex;gap:3px}.step .arrows button{flex:1;padding:0;min-height:22px;font-size:.6rem;box-shadow:0 2px 0 var(--felt-lo)}
 .step .flag{min-height:24px;padding:0;font-size:.66rem}
-.step .flag[aria-pressed=true]{background:var(--amber);color:var(--felt);box-shadow:0 4px 0 var(--amber-lo)}
+.step .flag[aria-pressed=true]{background:var(--amber);color:var(--felt);font-weight:700;box-shadow:0 4px 0 var(--amber-lo)}
 .step .flag.sld[aria-pressed=true]{background:var(--blue);box-shadow:0 4px 0 var(--blue-lo)}
 .step.current{border-color:var(--cream);box-shadow:0 0 0 2px var(--cream) inset}
 
@@ -148,7 +148,7 @@ body[data-view=sequence] .view[data-view=sequence],body[data-view=effects] .view
 .piano .w{flex:1;position:relative;background:var(--cream);border:1px solid var(--felt);border-top:0;cursor:pointer;display:flex;flex-direction:column-reverse;align-items:center;justify-content:flex-start;gap:2px;padding-bottom:4px;font-size:.6rem;color:var(--felt-hi)}
 .piano .b{position:absolute;top:0;height:60%;background:var(--felt-lo);border:2px solid var(--edge);border-top:0;z-index:2;cursor:pointer}
 .piano .on{background:var(--amber)!important}
-.piano .w kbd{background:transparent;border:0;color:var(--cream-lo);font-size:.6rem;padding:0}
+.piano .w kbd{background:transparent;border:0;color:var(--felt-lo);font-size:.6rem;padding:0}
 
 @media (max-width:760px){
   .app{padding:8px 10px 0}

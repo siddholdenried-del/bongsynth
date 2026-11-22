@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0F1A1E">
+<title>BongSynth · Voice Console</title>
+<meta name="description" content="Play BongSynth, the GhettoMachine's instrument-track synth, in your browser: 129 factory sounds, every page of the voice, a 303-style step sequencer, LFO, COLOR and the reverb and delay.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; worker-src 'self'; form-action 'none'; base-uri 'none'">
+<link rel="canonical" href="https://tools.bongcult.com/bongsynth/">
+<link rel="icon" type="image/svg+xml" href="art/bs-mark.svg"><link rel="stylesheet" href="synth.css">
+</head>
+<body data-view="sound">
+<div class="vhs" aria-hidden="true"><i class="lines"></i><i class="vig"></i></div>
+<div class="app">
+<header class="bar">
+  <h1 class="word">BONGSYNTH</h1>
+  <div class="transport">
+    <button id="play" class="chunk cream" type="button" aria-pressed="false">▶ PLAY</button>
+    <label class="bpm"><input id="tempo" type="number" min="40" max="240" value="124" inputmode="numeric" aria-label="Tempo in BPM"> BPM</label>
+    <span class="lamp" id="status" role="status">Audio is off</span>
+  </div>
+  <nav class="modes" role="tablist" aria-label="Editor">
+    <button type="button" role="tab" data-tab="sound">SOUND</button>
+    <button type="button" role="tab" data-tab="matrix">MATRIX</button>
+    <button type="button" role="tab" data-tab="sequence">SEQUENCE</button>
+    <button type="button" role="tab" data-tab="effects">EFFECTS</button>
+  </nav>
+  <details class="menu" id="menu"><summary aria-label="Menu">☰</summary>
+    <div class="menu-body">
+      <label class="fx-toggle"><input type="checkbox" id="fx-off"> FX OFF <small>(NO SCANLINES)</small></label>
+      <section><h2>KEYS</h2><p>THE COMPUTER KEYBOARD IS A PIANO: <kbd>A</kbd> TO <kbd>K</kbd> ARE THE WHITE KEYS, <kbd>W</kbd> <kbd>E</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> THE BLACK. <kbd>Z</kbd> / <kbd>X</kbd> OCTAVE DOWN / UP. HOLD <kbd>SHIFT</kbd> TO PLAY LOUDER. <kbd>SPACE</kbd> PLAYS / STOPS THE SEQUENCE, <kbd>ESC</kbd> SILENCES EVERYTHING.</p><p>KNOBS: DRAG UP / DOWN (SHIFT = FINE), MOUSE WHEEL OR ARROW KEYS. DOUBLE-CLICK RESETS.</p></section>
+      <section><h2>SHARE SOUND</h2><div class="file-actions"><button type="button" class="chunk" id="sound-export">DOWNLOAD .TXT</button><label class="file-pick">CHOOSE<input type="file" id="sound-file" accept=".txt,text/plain"></label></div><p id="sound-notice" class="file-notice" role="status"></p></section>
+      <section class="links"><a href="https://ghettomachine.bongcult.com/bongsynth/">ARCHITECTURE</a><a href="https://github.com/siddholdenried-del/bongsynth/archive/refs/tags/v0.1.0.zip">SOURCE CODE (GPLV3)</a><a href="https://ghettomachine.bongcult.com/">GHETTOMACHINE</a><a href="https://tools.bongcult.com/">AUDIO TOOLS</a></section>
+      <p class="credit">BONGSYNTH BY BONGSOFT · PROVIDED BY BONGTECH · PART OF BONGCULT. THE VOICE IS FELUCCA-ENGINES' ANALOG BY LEO KUROSHITA, HÜGELTON INSTRUMENTS (MIT); THE REVERB AND DELAY FROM X0X BY CHARLES VESTAL (GPL-3.0), AFTER 9W9.</p>
+    </div>
+  </details>
+</header>
+
+<main class="screen" id="screen">
+  <section class="view" data-view="sound" role="tabpanel" aria-label="Sound">
+    <div class="row">
+      <div class="picker"><span class="tag">SOUND</span><button type="button" class="chunk nudge" id="preset-prev" aria-label="Previous sound">‹</button><select id="preset" aria-label="Factory sound"></select><button type="button" class="chunk nudge" id="preset-next" aria-label="Next sound">›</button></div>
+      <div class="seg" role="group" aria-label="Voice mode"><button type="button" data-mono="1">MONO</button><button type="button" data-mono="0">POLY</button></div>
+    </div>
+    <div class="pages" role="tablist" aria-label="Sound page" id="pages"></div>
+    <h2 class="page-title" id="page-title">OSC</h2>
+    <div class="knobs big" id="knobs"></div>
+  </section>
+
+  <section class="view" data-view="matrix" role="tabpanel" aria-label="Mod matrix">
+    <p class="hint">SIX SLOTS. EACH ROUTES A SOURCE TO A DESTINATION BY AN AMOUNT (±64). LFO 1 IS THE ONE ON THE EFFECTS PAGE; LFO 2, MOD ENV AND THE MACROS ARE ON SOUND.</p>
+    <div class="matrix" id="matrix"></div>
+  </section>
+
+  <section class="view" data-view="sequence" role="tabpanel" aria-label="Sequence">
+    <div class="row">
+      <div class="picker"><span class="tag">LOAD</span><select id="phrase" aria-label="Load a phrase"></select></div>
+      <button type="button" class="chunk blue" id="generate">⚄ GENERATE</button>
+      <div class="knob-slot" id="transpose-slot"></div>
+      <button type="button" class="chunk" id="seq-clear">CLEAR</button>
+    </div>
+    <div class="steps-wrap"><div class="steps" id="steps" role="group" aria-label="Sixteen steps"></div></div>
+    <p class="hint">TAP A STEP'S LAMP TO TURN IT ON. DRAG ITS NOTE UP OR DOWN (OR USE ▲ ▼). <b>ACC</b> PLAYS IT LOUDER WITH A FILTER SWEEP; <b>SLD</b> HOLDS IT INTO THE NEXT NOTE AND GLIDES, AS A 303. GENERATE WRITES A NEW LINE IN C MINOR.</p>
+  </section>
+
+  <section class="view" data-view="effects" role="tabpanel" aria-label="Effects">
+    <div class="fx-grid">
+      <div class="panel"><h2>LFO 1</h2><div class="knobs" id="lfo"></div></div>
+      <div class="panel"><h2>COLOR <span class="seg mini" role="group" aria-label="Color"><button type="button" data-color="0">OFF</button><button type="button" data-color="1">ON</button></span></h2><div class="knobs" id="color"></div></div>
+      <div class="panel"><h2>MIX</h2><div class="knobs" id="mix"></div></div>
+      <div class="panel"><h2>ROOM REVERB</h2><div class="knobs" id="reverb"></div></div>
+      <div class="panel wide"><h2>DELAY</h2><div class="knobs" id="delay"></div></div>
+    </div>
+  </section>
+</main>
+
+<footer class="keys-bar">
+  <div class="keys-side">
+    <div class="oct"><button type="button" class="chunk nudge" id="oct-down" aria-label="Octave down">−</button><span id="oct-read">C3</span><button type="button" class="chunk nudge" id="oct-up" aria-label="Octave up">+</button></div>
+    <div class="meter" aria-hidden="true"><i id="out-bar"></i></div>
+    <span class="voices" id="voices">0 VOICES</span>
+  </div>
+  <div class="piano" id="piano" role="group" aria-label="Keyboard. Press keys to play."></div>
+</footer>
+</div>
+<script type="module" src="app.js"></script></body></html>

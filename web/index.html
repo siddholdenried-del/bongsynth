@@ -10,21 +10,6 @@
 <link rel="stylesheet" href="instrument-geometry.css">
 </head>
 <body data-view="sound">
-<div class="vhs" aria-hidden="true"><i class="drift"></i><i class="lines"></i><i class="track"></i><i class="vig"></i></div>
-<svg class="fx-defs" width="0" height="0" aria-hidden="true" focusable="false">
-<!-- BongDrums' mosaic: soften to about one block, keep one sample per block, dilate it to fill the block. -->
-<filter id="pixelate" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
-  <feGaussianBlur in="SourceGraphic" stdDeviation="0.9" result="soft"/>
-  <feComponentTransfer in="soft" result="lift"><feFuncR type="gamma" exponent="0.8"/><feFuncG type="gamma" exponent="0.8"/><feFuncB type="gamma" exponent="0.8"/></feComponentTransfer>
-  <feFlood x="1" y="1" width="1" height="1"/><feComposite width="3" height="3"/><feTile result="grid"/>
-  <feComposite in="lift" in2="grid" operator="in"/><feMorphology operator="dilate" radius="1"/>
-</filter>
-<filter id="pixelate-fine" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
-  <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="soft"/>
-  <feComponentTransfer in="soft" result="lift"><feFuncR type="gamma" exponent="0.85"/><feFuncG type="gamma" exponent="0.85"/><feFuncB type="gamma" exponent="0.85"/></feComponentTransfer>
-  <feFlood x="0" y="0" width="1" height="1"/><feComposite width="2" height="2"/><feTile result="grid"/>
-  <feComposite in="lift" in2="grid" operator="in"/><feMorphology operator="dilate" radius="0.5"/>
-</filter></svg>
 <div class="app">
 <header class="bar">
   <h1 class="word">BONGSYNTH</h1>

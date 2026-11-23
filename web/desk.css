@@ -292,24 +292,14 @@ body.is-dry .view[data-view=bus] .knobs{opacity:.45}
 /* The official sticker artwork as-is, with a carmine drop to sit it on the deck. */
 .bongsoft-mark{display:block;width:clamp(280px,32vw,480px);height:auto;filter:drop-shadow(calc(var(--u)*2) calc(var(--u)*2) 0 var(--carmine-lo))}
 
-/* ---------- VHS: drift behind, pixelation over, scanlines one per block ---------- */
-.vhs{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.vhs i{position:absolute;inset:0;display:block}
-.vhs .drift{inset:-20%;background:radial-gradient(40% 35% at 30% 30%,#4a173866,transparent 70%),radial-gradient(35% 40% at 75% 70%,#3a0f2e55,transparent 70%),#000;opacity:.55;animation:drift 48s ease-in-out infinite alternate}
-.vhs .lines{display:none}
-.vhs .vig{background:radial-gradient(120% 95% at 50% 50%,transparent 55%,#000a 100%)}
-.vhs .track{top:-12%;height:10%;inset-inline:0;bottom:auto;background:linear-gradient(180deg,transparent,#ffe8b612 45%,#55a0c91c 50%,#ffe8b612 55%,transparent);
-  -webkit-mask:linear-gradient(90deg,#000 0 6%,transparent 14% 86%,#000 94%);mask:linear-gradient(90deg,#000 0 6%,transparent 14% 86%,#000 94%);animation:track 23s linear infinite}
-@keyframes drift{from{transform:translate(-3%,-2%) scale(1)}to{transform:translate(3%,2%) scale(1.06)}}
-@keyframes track{0%,82%{transform:translateY(0);opacity:0}84%{opacity:1}100%{transform:translateY(1300%);opacity:.8}}
-.screen.fringe::after{content:"";position:absolute;inset:var(--u) calc(var(--u)*-2) calc(var(--u)*-1);pointer-events:none;box-shadow:calc(var(--u)*-1) 0 0 #dc453c88,var(--u) 0 0 #55a0c988;animation:fringe .28s steps(3,end) forwards}
-@keyframes fringe{from{opacity:1}to{opacity:0}}
-.fx-defs{position:absolute;width:0;height:0;overflow:hidden}
-body:not(.fx-off) .app{filter:url(#pixelate)}
-body.fx-off .vhs,body.fx-off .plot-trace::after,body.fx-off .scope::after,body.fx-off .bus-scope::after{display:none}
-body.fx-off .screen.fringe::after{display:none}
+/* CSS-only VHS overlay: never rasterize the instrument or its scopes. */
+body:not(.fx-off)::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:20;
+  background:repeating-linear-gradient(180deg,transparent 0 3px,#14071014 3px 4px),
+             linear-gradient(90deg,#dc453c14,transparent 15% 85%,#55a0c914);
+}
+body.fx-off .plot-trace::after,body.fx-off .scope::after,body.fx-off .bus-scope::after{display:none}
 @media (prefers-reduced-motion:reduce){
-  .vhs .drift{animation:none}.vhs .track{display:none}.screen.fringe::after{display:none}
   .lane.hit{animation:none}
 }
 
@@ -327,7 +317,6 @@ body.fx-off .screen.fringe::after{display:none}
 /* ---------- phone: a finer 2 px block ---------- */
 @media (max-width:640px){
   :root{--u:2px;--t-s:18px;--t-m:20px;--t-l:25px;--t-xl:34px;font-size:var(--t-s)}
-  body:not(.fx-off) .app{filter:url(#pixelate-fine)}
   .app{padding:calc(var(--u)*4) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
   .bar{gap:calc(var(--u)*3)}
   .word{font-size:var(--t-s);letter-spacing:0}

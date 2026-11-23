@@ -13,7 +13,7 @@ try{
  const cmd=(method,params={})=>new Promise((resolve,reject)=>{const i=++id;pending.set(i,d=>{pending.delete(i);d.error?reject(d.error):resolve(d.result)});ws.send(JSON.stringify({id:i,method,params}));});
  const js=async(expression,userGesture=false)=>{const d=await cmd('Runtime.evaluate',{expression,userGesture,awaitPromise:true,returnByValue:true});if(d.exceptionDetails)throw Error(JSON.stringify(d.exceptionDetails));return d.result.value;};
  const poll=async expr=>{for(let i=0;i<120;i++){const x=await js(expr);if(x)return x;await wait(75)}throw Error(expr)};
- const base='http://127.0.0.1:48791/',candidate='http://127.0.0.1:48792/';
+ const candidate=process.argv[2]||'http://127.0.0.1:48792/';
  await cmd('Page.enable');
  await cmd('Page.addScriptToEvaluateOnNewDocument',{source:`
  window.testAudio=0;
@@ -29,9 +29,13 @@ try{
   const click=sel=>js(`document.querySelector(${JSON.stringify(sel)}).click()`);
   const key=async key=>{for(const type of [key==='Enter'?'keyDown':'rawKeyDown','keyUp'])await cmd('Input.dispatchKeyEvent',{type,key,code:key,windowsVirtualKeyCode:{ArrowLeft:37,ArrowRight:39,Enter:13}[key],...(key==='Enter'&&type==='keyDown'?{text:'\r'}:{})});};
   const next=desk+' [data-dir="1"]';
-  for(const page of ['OSC 2','TONE','SHAPER','FILTER','FILTER ENV','AMP ENV','TOUCH','VOICE','MOD ENV','LFO 2','MACRO','OSC']){
-    await click(next); assert.equal(await name(),page,'consecutive sound pages');
+  assert.deepEqual(await js(`[...document.querySelectorAll('${desk} .page-context span')].map(e=>[e.textContent,e.offsetWidth>0])`),[['‹ MACRO',true],['OSC 2 ›',true]]);
+  for(const page of ['OSC 2','SHAPER','TONE','FILTER','FILTER ENV','AMP ENV','VOICE','TOUCH','MOD ENV','LFO 2','MACRO','OSC']){
+    await js(`document.querySelector('${next}').focus()`);await key('ArrowRight');assert.equal(await name(),page,'consecutive keyboard sound pages');
   }
+  await key('ArrowLeft');assert.equal(await name(),'MACRO','previous wraps');await key('ArrowRight');assert.equal(await name(),'OSC');
+  await click(next); assert.equal(await name(),'OSC 2','on-screen next matches keyboard');
+  await click(desk+' [data-dir="-1"]'); assert.equal(await name(),'OSC');
   assert.ok(await js(`[...document.querySelectorAll('${desk} button[data-stage]')].filter(e=>e.offsetWidth).every(e=>e.getBoundingClientRect().height>=26 && e.getBoundingClientRect().right<=innerWidth)`));
   await js(`document.querySelector('${next}').focus()`); await key('ArrowRight'); assert.equal(await name(),'OSC 2');
   await js(`document.querySelector('${desk} input').focus()`);await key('ArrowRight');assert.equal(await name(),'OSC 2','knob arrow changes knob, not page');
@@ -47,6 +51,8 @@ try{
   assert.equal(await js("document.querySelector('[data-desk=fx] .page-tag').value"),'MIX');
   await js("document.querySelector('#play').click()",true);
   assert.equal(await js("document.documentElement.scrollWidth"),width);
-  console.log(width,{stageJumps:true,touch:width<500,playingScope:true});
+  await js(`(()=>{const k='bongsynth-v2';const s=JSON.parse(localStorage.getItem(k))||{};s.pages={sound:8};delete s.soundPageName;localStorage.setItem(k,JSON.stringify(s));sessionStorage.setItem(k+'-view','sound');})()`);
+  await cmd('Page.reload');await poll("document.querySelector('[data-desk=sound] .page-tag')?.value==='SHAPER'");
+  console.log(width,{stageJumps:true,touch:width<500,playingScope:true,legacyPanel:true});
  }
 }finally{ws?.close();chrome.kill();await wait(350);await rm(profile,{recursive:true,force:true}).catch(()=>{});}

@@ -27,14 +27,15 @@ export function flowStages(spec,{sound,lfo}){
   return ['amp'];
 }
 
-// Stable editing order; the scope above can still reflect pre/post-filter shaper routing.
+// Stable editing order follows the default pre-filter chain; the scope still shows actual routing.
 const legacySoundPages=['OSC','TONE','FILTER','AMP ENV','FILTER ENV','VOICE','TOUCH','OSC 2','SHAPER','MOD ENV','LFO 2','MACRO'];
-export const soundPageOrder=['OSC','OSC 2','TONE','SHAPER','FILTER','FILTER ENV','AMP ENV','TOUCH','VOICE','MOD ENV','LFO 2','MACRO'];
+export const soundPageOrder=['OSC','OSC 2','SHAPER','TONE','FILTER','FILTER ENV','AMP ENV','VOICE','TOUCH','MOD ENV','LFO 2','MACRO'];
 export const soundPageIndex=(legacyIndex,savedName)=>Math.max(0,soundPageOrder.indexOf(savedName||legacySoundPages[legacyIndex]));
 const destinations={
   osc:['sound','OSC'], shape:['sound','SHAPER'], drive:['sound','TONE',3], filter:['sound','FILTER'],
   amp:['sound','AMP ENV'], dry:['fx','MIX',0], out:['fx','MIX',1], mod:['sound','MOD ENV']
 };
 export const scopeDestination=id=>destinations[id];
-const soundGroups=['osc','osc','drive','shape','filter','filter','amp','amp','mod','mod','mod','mod'];
-export const soundPageStage=name=>soundGroups[soundPageOrder.indexOf(name)];
+const soundGroups={OSC:'osc','OSC 2':'osc',SHAPER:'shape',TONE:'drive',FILTER:'filter','FILTER ENV':'filter',
+  'AMP ENV':'amp',VOICE:'mod',TOUCH:'amp','MOD ENV':'mod','LFO 2':'mod',MACRO:'mod'};
+export const soundPageStage=name=>soundGroups[name];

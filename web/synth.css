@@ -1,176 +1,94 @@
-/* BongSynth · Paper. BongDrums' Felt desk, inverted: its plum felt becomes the ink, its cream ink becomes the paper. */
-:root{color-scheme:light;--sharp:1px;
-  --felt:#FFE8B6;--felt-hi:#F7DBA2;--felt-lo:#DDBF84;--cell:#F0D295;--cell-hi:#E8C786;
+/* BongSynth on the BongSoft system. desk.css is BongDrums' stylesheet as it is (STYLE.md: the pixel unit, type, controls,
+   the desk, the VHS treatment); this file only maps BongSynth's palette onto the guide's colour roles and adds what a
+   synth has that a drum machine does not: the KEYS view and the 303 step grid.
+   BongSynth's palette is BongDrums' turned inside out: plum ink on cream paper, its screens plum with cream ink. */
+:root{color-scheme:light;
+  /* background, raised / cell, ink, dim ink, trace, accent, alert, frame (STYLE.md section 4) */
+  --felt:#FFE8B6;--felt-hi:#F7DBA2;--felt-lo:#D9BB80;--well:#F3D9A4;--cell:#EED093;--cell-hi:#E5C27C;
   --cream:#230E1B;--cream-lo:#5A2A44;--dim:#6E4A5C;--blue:#2F6C8E;--blue-lo:#1C445B;--amber:#9A5A12;--amber-lo:#5E360A;
-  --carmine:#B8322A;--carmine-lo:#701B16;--ring:#8C5A7C;--edge:#D2AE74;
-  --mono:"Courier New",Courier,monospace;
-  font:700 15px/1.25 var(--mono);color:var(--cream);background:var(--felt);text-transform:uppercase;letter-spacing:.04em}
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;overflow:hidden}
-body{background:var(--felt);-webkit-tap-highlight-color:transparent}
-button,select,input{font:inherit;color:inherit;text-transform:uppercase;letter-spacing:inherit}
-:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
-.tag{font-size:.72rem;color:var(--dim);letter-spacing:.12em;white-space:nowrap}
-.hint{margin:0 auto;font-size:.7rem;color:var(--dim);max-width:72ch;text-align:center;font-weight:400;padding:0 .5rem}
-.hint b{color:var(--cream)}
-kbd{font:700 .75rem var(--mono);border:1px solid var(--edge);border-bottom-width:3px;padding:0 .3em;background:var(--felt-hi);color:var(--amber)}
+  --carmine:#B8322A;--carmine-lo:#701B16;--ring:#8C5A7C;--edge:#C9A46A;
+  /* screen and screen-ink: display panels only */
+  --screen:#1B0B15;--screen-grid:#33172A;--screen-ink:#FFE8B6;--screen-dim:#B48FA3;--screen-faint:#6A3E58;--screen-trace:#7FC4E8;
+  --screen-accent:#FFC05C;--screen-alert:#FF7A66;--screen-frame:#8C5A7C;--screen-well:#3A1C30}
+/* On paper the lit states carry paper-coloured text (BongDrums puts cream on them, which is our ink). */
+.modes button[aria-selected=true],#rec[aria-pressed=true],.mute[aria-pressed=true]{color:var(--felt)}
+.knob .face{fill:var(--cell)}
+.sheet{background:#230e1bb8}
+.sheet-panel,.menu-body{box-shadow:calc(var(--u)*3) calc(var(--u)*3) 0 var(--cream)}
+/* the VHS drift and vignette, toned for paper */
+.vhs .drift{background:radial-gradient(40% 35% at 30% 30%,#c98a6a40,transparent 70%),radial-gradient(35% 40% at 75% 70%,#8c5a7c33,transparent 70%),var(--felt);opacity:1}
+.vhs .vig{background:radial-gradient(120% 95% at 50% 50%,transparent 55%,#5a2a4440 100%)}
+.vhs .track{background:linear-gradient(180deg,transparent,#230e1b0d 45%,#2f6c8e1c 50%,#230e1b0d 55%,transparent)}
+/* screens: BongDrums' navy panels become plum */
+.plot,.lcd-pop{background:var(--screen);box-shadow:inset 0 0 0 var(--u) var(--screen-frame)}
+.lcd-pop{box-shadow:inset 0 0 0 var(--u) var(--screen-frame),calc(var(--u)*3) calc(var(--u)*3) 0 var(--cream)}
+.readout{box-shadow:inset 0 calc(var(--u)*-1) 0 var(--screen-well)}
+.readout #lcd-label,.lcd-pop span{color:var(--screen-dim)}
+.readout #lcd-value,.lcd-pop output{color:var(--screen-accent)}
+.readout #crt-mode{color:var(--screen-dim)}
+.lcd-hit{background:var(--screen-well)}
+@keyframes lcdhit{from{background:var(--screen-ink)}}@keyframes lcdacc{from{background:var(--screen-accent)}}
+.page-tag{color:var(--screen-ink);box-shadow:inset 0 0 0 var(--u) var(--screen-dim)}
+.plot-trace::after{background:repeating-linear-gradient(180deg,#0000 0 2px,#00000038 2px 3px)}
+.bongsoft-mark{filter:drop-shadow(calc(var(--u)*2) calc(var(--u)*2) 0 var(--carmine-lo))}
 
-/* ---------- scanlines ---------- */
-.vhs{position:fixed;inset:0;pointer-events:none;z-index:0}
-.vhs i{position:absolute;inset:0}
-.vhs .lines{background:repeating-linear-gradient(0deg,#0000 0 2px,#230E1B14 2px 3px);opacity:.6}
-.vhs .vig{background:radial-gradient(ellipse at center,#0000 60%,#5A2A4433 100%)}
-body.fx-off .vhs{display:none}
+/* the readout, one per desk (BongDrums styles its single one by id) */
+.readout .ro-label{font-size:var(--t-s);color:var(--screen-dim);overflow:hidden;text-overflow:ellipsis;min-width:0}
+.readout .ro-value{font-size:var(--t-m);color:var(--screen-accent)}
+.readout .ro-mode{font-size:var(--t-s);color:var(--screen-dim);overflow:hidden;text-overflow:ellipsis;min-width:0}
+@media (max-width:640px){.readout .ro-mode{display:none}}
 
-/* ---------- chunky controls ---------- */
-.chunk,.seg button,.pages button,.modes button,.step button{
-  border:0;border-radius:var(--sharp);padding:.35rem .7rem;min-height:34px;cursor:pointer;user-select:none;
-  background:var(--cell);color:var(--cream);box-shadow:0 4px 0 var(--felt-lo);transition:transform .05s,box-shadow .05s,filter .1s}
-.chunk:hover,.seg button:hover,.pages button:hover,.step button:hover{filter:brightness(1.15)}
-.chunk:active,.seg button:active,.pages button:active,.modes button:active,.step button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--felt-lo)}
-.chunk:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.chunk.cream{background:var(--cream);color:var(--felt);box-shadow:0 4px 0 var(--cream-lo)}
-.chunk.blue{background:var(--blue);color:var(--felt);box-shadow:0 4px 0 var(--blue-lo)}
-.nudge{padding:0 .55rem;font-size:1.2rem;line-height:1;min-width:34px;background:transparent;border:2px solid var(--cream);box-shadow:0 3px 0 var(--felt-lo)}
-.seg{display:inline-flex;border:2px solid var(--ring);padding:2px;background:var(--felt-lo);margin:0;vertical-align:middle}
-.seg button{box-shadow:none;background:transparent;min-height:30px;padding:.2rem .8rem}
-.seg [aria-pressed=true]{background:var(--cream);color:var(--felt)}
-.seg.mini button{min-height:22px;padding:0 .45rem;font-size:.7rem}
-select{background:var(--felt-lo);border:2px solid var(--ring);border-radius:var(--sharp);padding:.3rem .5rem;min-height:34px;color:var(--cream);cursor:pointer;min-width:0}
-optgroup{color:var(--amber);font-style:normal}
-option{color:var(--cream);background:var(--felt-lo)}
+/* ---------- the views ---------- */
+body[data-view=sound] .view[data-view=sound],body[data-view=keys] .view[data-view=keys],body[data-view=sequence] .view[data-view=sequence],
+body[data-view=matrix] .view[data-view=matrix],body[data-view=fx] .view[data-view=fx]{display:flex}
+.view[data-view=sound],.view[data-view=matrix],.view[data-view=fx],.view[data-view=keys]{justify-content:flex-start}
+.voice-pick.custom h2::after{content:" *";color:var(--amber)}
+.preset-p.custom{color:var(--cream);box-shadow:inset 0 0 0 var(--u) var(--amber),0 calc(var(--u)*2) 0 var(--felt-lo)}
 
-/* ---------- frame ---------- */
-.app{position:relative;z-index:1;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:10px 18px 0}
-.bar{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem 1rem;padding:.2rem 0 .6rem;border-bottom:3px solid var(--cream);position:relative;z-index:5}
-.word{margin:0;font:700 clamp(1.5rem,2.6vw,2.3rem)/1 var(--mono);letter-spacing:.02em;text-shadow:2px 2px 0 var(--carmine)}
-.transport{display:flex;align-items:center;gap:.55rem;min-width:0}
-#play{min-width:7.2rem;font-size:1.05rem}
-#play[aria-pressed=true]{background:var(--amber);box-shadow:0 4px 0 var(--amber-lo)}
-.bpm{display:flex;align-items:center;gap:.4rem;font-size:1.2rem}
-.bpm input{width:3.4ch;background:transparent;border:0;border-bottom:2px dashed transparent;color:var(--carmine);font-size:1.35rem;padding:0;text-align:right;-moz-appearance:textfield}
-.bpm input:hover,.bpm input:focus{border-bottom-color:var(--carmine)}
-.bpm input::-webkit-inner-spin-button,.bpm input::-webkit-outer-spin-button{-webkit-appearance:none}
-.lamp{font-size:.62rem;color:var(--dim);font-weight:400;max-width:14ch;line-height:1.1}
-.modes{display:flex;align-items:center;margin-left:auto;gap:.9rem}
-.modes button{background:transparent;box-shadow:none;font-size:1.05rem;padding:.3rem .65rem;position:relative}
-.modes button+button::before{content:"|";position:absolute;left:-.75rem;opacity:.8;pointer-events:none}
-.modes button[aria-selected=true]{background:var(--carmine);color:var(--felt);box-shadow:0 4px 0 var(--carmine-lo)}
-.menu{position:relative}
-.menu summary{list-style:none;cursor:pointer;padding:.25rem .55rem;border:2px solid var(--cream);font-size:1.1rem;box-shadow:0 3px 0 var(--felt-lo)}
-.menu summary::-webkit-details-marker{display:none}
-.menu[open] summary{background:var(--cream);color:var(--felt)}
-.menu-body{position:absolute;right:0;top:calc(100% + 10px);width:min(400px,92vw);max-height:calc(100dvh - 90px);overflow:auto;background:var(--felt-hi);border:2px solid var(--ring);padding:.6rem .9rem .9rem;box-shadow:0 18px 40px #230E1B55;font-weight:400}
-.menu-body h2{font:700 .8rem var(--mono);letter-spacing:.14em;color:var(--amber);margin:.9rem 0 .35rem}
-.menu-body p{margin:.25rem 0;font-size:.72rem;color:var(--dim)}
-.menu-body a{color:var(--blue)}
-.fx-toggle{display:flex;align-items:center;gap:.5rem;cursor:pointer;font-weight:700}.fx-toggle small{color:var(--dim);font-weight:400}
-.links{display:flex;flex-wrap:wrap;gap:.3rem 1rem;margin-top:.8rem;font-size:.75rem}
-.credit{font-size:.62rem!important;margin-top:.8rem!important}
-.file-actions{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
-.file-actions .chunk{min-height:30px;font-size:.72rem}
-.file-pick{border:2px dashed var(--edge);padding:.25rem .4rem;display:flex;gap:.3rem;align-items:center;font-size:.68rem;max-width:100%}.file-pick input{max-width:9rem;font-size:.62rem}
-.file-notice{color:var(--amber)!important;font-size:.7rem}.file-notice:empty{display:none}
+/* ---------- KEYS: the output scope leads; the piano is the strip beneath, octave arrows at its sides ---------- */
+.keys-row{flex:none;display:flex;align-items:stretch;gap:calc(var(--u)*3);height:clamp(110px,calc(130px + (100dvh - 720px) * .3),300px)}
+.piano{position:relative;flex:1;min-width:0;display:flex;touch-action:none;user-select:none}
+.piano .w{flex:1 1 0;min-width:0;position:relative;background:var(--cell);box-shadow:inset 0 0 0 var(--u) var(--cream);margin-right:calc(var(--u)*-1);
+  display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:var(--u);padding-bottom:calc(var(--u)*3);cursor:pointer;font-size:var(--t-s);color:var(--dim)}
+.piano .w kbd{font-size:16px;border-width:var(--u);border-bottom-width:calc(var(--u)*2)}
+.piano .b{position:absolute;top:0;height:58%;z-index:2;background:var(--cream);box-shadow:0 calc(var(--u)*2) 0 var(--cream-lo);cursor:pointer}
+.piano .w.on{background:var(--amber);color:var(--felt)}
+.piano .b.on{background:var(--amber);box-shadow:0 var(--u) 0 var(--amber-lo)}
+.piano .c{color:var(--cream)}
 
-/* ---------- views ---------- */
-.screen{position:relative;min-height:0;padding:12px 0;overflow:auto}
-.view{display:none;min-height:100%;flex-direction:column;align-items:center;gap:clamp(.5rem,1.6dvh,1.1rem)}
-body[data-view=sound] .view[data-view=sound],body[data-view=matrix] .view[data-view=matrix],
-body[data-view=sequence] .view[data-view=sequence],body[data-view=effects] .view[data-view=effects]{display:flex}
-.row{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.5rem 1rem;width:100%}
-.picker{display:flex;align-items:center;gap:.35rem;min-width:0}
-.picker select{width:clamp(11rem,22vw,17rem)}
-.pages{display:flex;flex-wrap:wrap;justify-content:center;gap:.45rem;max-width:62rem}
-.pages button{font-size:.78rem;min-height:30px;padding:.2rem .6rem}
-.pages button[aria-selected=true]{background:var(--blue);color:var(--felt);box-shadow:0 4px 0 var(--blue-lo)}
-.pages .brk{flex-basis:100%;height:0}
-.page-title{margin:.2rem 0 0;font-size:clamp(1.1rem,2vw,1.6rem);letter-spacing:.2em;color:var(--amber)}
+/* ---------- SEQ: 16 steps in groups of four; rows ON, NOTE, ACC, SLD ---------- */
+.seq-head{flex:none}
+.seq-head .stepper .val{font-size:var(--t-m)}
+.steps-wrap{flex:1;min-height:0;width:100%;display:flex}
+.steps{--sp:calc(var(--u)*4);flex:1;display:grid;column-gap:calc(var(--u)*2);row-gap:calc(var(--u)*2);user-select:none;
+  grid-template-columns:calc(var(--u)*20) repeat(4,minmax(0,1fr)) var(--sp) repeat(4,minmax(0,1fr)) var(--sp) repeat(4,minmax(0,1fr)) var(--sp) repeat(4,minmax(0,1fr));
+  grid-template-rows:calc(var(--u)*9) repeat(4,minmax(0,1fr))}
+.steps .hrow{grid-column:var(--c);grid-row:1;text-align:center;align-self:center;font-size:var(--t-s);color:var(--dim)}
+.steps .hrow.beat{color:var(--cream)}
+.steps .hrow.current{color:var(--felt);background:var(--amber)}
+.steps .rlab{grid-column:1;grid-row:var(--r);align-self:center;font-size:var(--t-s);color:var(--dim);letter-spacing:.12em}
+.steps .cell{grid-column:var(--c);grid-row:var(--r);min-height:0;min-width:0;padding:0;border:0;background:var(--cell);cursor:pointer;color:var(--cream);font:700 var(--t-m)/1 var(--mono);
+  box-shadow:inset 0 calc(var(--u)*-2) 0 var(--edge)}
+.steps .cell:hover{background:var(--cell-hi)}
+.steps .cell[aria-pressed=true]{background:var(--blue);color:var(--felt);box-shadow:inset 0 calc(var(--u)*-2) 0 var(--blue-lo)}
+.steps .cell.acc[aria-pressed=true]{background:var(--amber);box-shadow:inset 0 calc(var(--u)*-2) 0 var(--amber-lo)}
+.steps .cell.acc[aria-pressed=true]::after{content:"•"}
+.steps .cell.sld[aria-pressed=true]::after{content:"⌒"}
+.steps .note{cursor:ns-resize;touch-action:none;font-size:var(--t-m)}
+.steps .note.off{color:var(--dim);background:var(--well)}
+.steps .cell.current{box-shadow:inset 0 0 0 var(--u) var(--cream)}
 
-/* ---------- knobs ---------- */
-.knobs{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:1rem clamp(1rem,3vw,3rem);width:100%}
-.knobs.big{flex:1 1 auto;align-content:center;gap:1.4rem clamp(1.4rem,5vw,4.5rem)}
-.knob{position:relative;display:flex;flex-direction:column;align-items:center;gap:.35rem;min-width:0;text-align:center;outline:none}
-.knob .kl{font-size:.78rem;letter-spacing:.08em;white-space:nowrap}
-.knob .dial{width:64px;aspect-ratio:1;cursor:ns-resize;touch-action:none}
-.knobs.big .dial{width:clamp(86px,12vw,150px)}
-.knobs.big .kl,.knobs.big .kv{font-size:clamp(.8rem,1.3vw,1.15rem)}
-.knob svg{width:100%;height:100%;overflow:visible;display:block}
-.knob .ticks line{stroke:var(--cream);stroke-width:1.6;stroke-dasharray:2 1.4}
-.knob .face{fill:var(--felt-hi);stroke:var(--ring);stroke-width:1.6}
-.knob .fill{fill:none;stroke:var(--amber);stroke-width:1.8;stroke-linecap:round;opacity:.6}
-.knob .ptr{stroke:var(--cream);stroke-width:3.4}
-.knob .kv{font-size:.8rem;color:var(--cream);white-space:nowrap;font-variant-numeric:tabular-nums;min-height:1.2em}
-.knob:focus-visible .face{stroke:var(--amber);stroke-width:2.6}
-.knob.turning .ptr{stroke:var(--amber)}
-.knob.enum .fill{stroke:var(--blue)}
-.knob-slot .knob{flex-direction:row;gap:.5rem}.knob-slot .dial{width:40px}.knob-slot .ticks{display:none}
-
-/* ---------- matrix ---------- */
-.matrix{display:grid;gap:.6rem;width:min(56rem,100%)}
-.slot{display:grid;grid-template-columns:2.5rem minmax(0,1fr) minmax(0,1fr) auto;gap:.6rem;align-items:center;background:var(--felt-hi);border:2px solid var(--edge);padding:.45rem .7rem}
-.slot>b{color:var(--amber)}
-.slot select{width:100%}
-.slot .knob{flex-direction:row;gap:.5rem}.slot .knob .dial{width:42px}.slot .knob .ticks{display:none}.slot .knob .kl{display:none}.slot .knob .kv{min-width:3.5ch}
-.slot.off{opacity:.55}
-
-/* ---------- sequence ---------- */
-.steps-wrap{width:100%;overflow-x:auto;padding-bottom:6px}
-.steps{display:grid;grid-template-columns:repeat(16,minmax(3.4rem,1fr));gap:6px;min-width:min-content;margin:0 auto;max-width:76rem}
-.step{display:flex;flex-direction:column;gap:5px;align-items:stretch;background:var(--felt-hi);border:2px solid var(--edge);padding:5px 4px 7px;text-align:center}
-.step:nth-child(4n+1){border-left-color:var(--ring)}
-.step .num{font-size:.62rem;color:var(--dim)}
-.step .lamp-btn{height:26px;padding:0;background:var(--felt-lo)}
-.step .lamp-btn[aria-pressed=true]{background:var(--carmine);box-shadow:0 4px 0 var(--carmine-lo)}
-.step .note{font-size:1rem;padding:.35rem 0;cursor:ns-resize;touch-action:none;user-select:none;border:2px dashed transparent}
-.step .note:focus-visible{border-color:var(--amber);outline:none}
-.step.off .note{opacity:.35}
-.step .arrows{display:flex;gap:3px}.step .arrows button{flex:1;padding:0;min-height:22px;font-size:.6rem;box-shadow:0 2px 0 var(--felt-lo)}
-.step .flag{min-height:24px;padding:0;font-size:.66rem}
-.step .flag[aria-pressed=true]{background:var(--amber);color:var(--felt);font-weight:700;box-shadow:0 4px 0 var(--amber-lo)}
-.step .flag.sld[aria-pressed=true]{background:var(--blue);box-shadow:0 4px 0 var(--blue-lo)}
-.step.current{border-color:var(--cream);box-shadow:0 0 0 2px var(--cream) inset}
-
-/* ---------- effects ---------- */
-.fx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr));gap:.8rem;width:min(80rem,100%)}
-.panel{background:var(--felt-hi);border:2px solid var(--edge);padding:.6rem .8rem 1rem}
-.panel h2{margin:0 0 .7rem;font-size:.85rem;letter-spacing:.16em;color:var(--amber);display:flex;align-items:center;gap:.7rem}
-.panel.wide{grid-column:1/-1}
-.panel .knobs{gap:.8rem 1.4rem}
-
-/* ---------- keyboard ---------- */
-.keys-bar{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.8rem;align-items:stretch;border-top:3px solid var(--cream);padding:.6rem 0 calc(.6rem + env(safe-area-inset-bottom))}
-.keys-side{display:flex;flex-direction:column;justify-content:center;gap:.45rem;min-width:7.5rem}
-.oct{display:flex;align-items:center;gap:.4rem}.oct span{min-width:2.4ch;text-align:center;font-size:1.05rem}
-.meter{height:8px;background:var(--felt-lo);border:1px solid var(--edge)}.meter i{display:block;height:100%;width:0;background:var(--blue);transition:width .06s}
-.meter i.hot{background:var(--carmine)}
-.voices{font-size:.62rem;color:var(--dim);font-weight:400}
-.piano{position:relative;height:clamp(84px,15dvh,132px);display:flex;touch-action:none;user-select:none}
-.piano .w{flex:1;position:relative;background:var(--cream);border:1px solid var(--felt);border-top:0;cursor:pointer;display:flex;flex-direction:column-reverse;align-items:center;justify-content:flex-start;gap:2px;padding-bottom:4px;font-size:.6rem;color:var(--felt-hi)}
-.piano .b{position:absolute;top:0;height:60%;background:var(--felt-lo);border:2px solid var(--edge);border-top:0;z-index:2;cursor:pointer}
-.piano .on{background:var(--amber)!important}
-.piano .w kbd{background:transparent;border:0;color:var(--felt-lo);font-size:.6rem;padding:0}
-
-@media (max-width:760px){
-  .app{padding:8px 10px 0}
-  .bar{padding-right:2.8rem}
-  .word{font-size:1.35rem}
-  #play{min-width:5.6rem;font-size:.9rem}
-  .bpm{font-size:.95rem}.bpm input{font-size:1.1rem}
-  .knobs.big{display:grid;grid-template-columns:repeat(2,auto);gap:1rem 2.4rem}
-  .knobs.big .dial{width:min(24vw,96px)}
-  .steps{grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
-  .step{padding:4px 2px 6px}
-  .step .note{font-size:.8rem}
-  .picker select{width:auto;flex:1}
-  .modes{margin-left:0;width:100%;justify-content:space-between;gap:.2rem;order:3}
-  .modes button{font-size:.82rem;padding:.3rem .4rem}
-  .modes button+button::before{display:none}
-  .menu{position:absolute;right:0;top:.2rem}
-  .lamp{display:none}
-  .keys-bar{grid-template-columns:1fr}
-  .keys-side{flex-direction:row;align-items:center;justify-content:space-between}
-  .keys-side .meter{flex:1}
-  .slot{grid-template-columns:2rem 1fr 1fr;}
-  .slot .knob{grid-column:2/-1}
+/* ---------- phones ---------- */
+@media (max-width:640px){
+  .keys-row{gap:var(--u);height:auto;min-height:150px}
+  .piano .w kbd{display:none}
+  .seq-head{gap:calc(var(--u)*3)}.seq-head .stepper{flex:1;min-width:0}.seq-head .stepbar{width:100%}.seq-head .stepper .val{flex:1;min-width:0}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* portrait phones: the grid turns, steps 1–16 down, so all sixteen fit on one screen */
+@media (max-width:640px) and (orientation:portrait){
+  .steps{grid-template-columns:calc(var(--u)*13) repeat(4,minmax(0,1fr));
+    grid-template-rows:calc(var(--u)*11) repeat(4,minmax(0,1fr)) var(--u) repeat(4,minmax(0,1fr)) var(--u) repeat(4,minmax(0,1fr)) var(--u) repeat(4,minmax(0,1fr))}
+  .steps .hrow{grid-column:1;grid-row:var(--sr);text-align:right;padding-right:var(--u)}
+  .steps .rlab{grid-row:1;grid-column:var(--pc);text-align:center;align-self:end}
+  .steps .cell{grid-column:var(--pc);grid-row:var(--sr);font-size:var(--t-s)}
+}

@@ -3,83 +3,107 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#FFE8B6">
 <title>BongSynth · Voice Console</title>
-<meta name="description" content="Play BongSynth, the GhettoMachine's instrument-track synth, in your browser: 129 factory sounds, every page of the voice, a 303-style step sequencer, LFO, COLOR and the reverb and delay.">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; worker-src 'self'; form-action 'none'; base-uri 'none'">
+<meta name="description" content="Play BongSynth, the GhettoMachine's instrument-track synth, in your browser: 129 factory sounds, every page of the voice, a mod matrix, a 303-style step sequencer, COLOR, reverb and delay.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'self'; worker-src 'self'; form-action 'none'; base-uri 'none'">
 <link rel="canonical" href="https://tools.bongcult.com/bongsynth/">
-<link rel="icon" type="image/svg+xml" href="art/bs-mark.svg"><link rel="stylesheet" href="synth.css">
+<link rel="icon" type="image/svg+xml" href="art/bs-mark.svg"><link rel="stylesheet" href="desk.css"><link rel="stylesheet" href="synth.css">
+<link rel="stylesheet" href="instrument-geometry.css">
 </head>
 <body data-view="sound">
-<div class="vhs" aria-hidden="true"><i class="lines"></i><i class="vig"></i></div>
+<div class="vhs" aria-hidden="true"><i class="drift"></i><i class="lines"></i><i class="track"></i><i class="vig"></i></div>
+<svg class="fx-defs" width="0" height="0" aria-hidden="true" focusable="false">
+<!-- BongDrums' mosaic: soften to about one block, keep one sample per block, dilate it to fill the block. -->
+<filter id="pixelate" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
+  <feGaussianBlur in="SourceGraphic" stdDeviation="0.9" result="soft"/>
+  <feComponentTransfer in="soft" result="lift"><feFuncR type="gamma" exponent="0.8"/><feFuncG type="gamma" exponent="0.8"/><feFuncB type="gamma" exponent="0.8"/></feComponentTransfer>
+  <feFlood x="1" y="1" width="1" height="1"/><feComposite width="3" height="3"/><feTile result="grid"/>
+  <feComposite in="lift" in2="grid" operator="in"/><feMorphology operator="dilate" radius="1"/>
+</filter>
+<filter id="pixelate-fine" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
+  <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="soft"/>
+  <feComponentTransfer in="soft" result="lift"><feFuncR type="gamma" exponent="0.85"/><feFuncG type="gamma" exponent="0.85"/><feFuncB type="gamma" exponent="0.85"/></feComponentTransfer>
+  <feFlood x="0" y="0" width="1" height="1"/><feComposite width="2" height="2"/><feTile result="grid"/>
+  <feComposite in="lift" in2="grid" operator="in"/><feMorphology operator="dilate" radius="0.5"/>
+</filter></svg>
 <div class="app">
 <header class="bar">
   <h1 class="word">BONGSYNTH</h1>
   <div class="transport">
     <button id="play" class="chunk cream" type="button" aria-pressed="false">▶ PLAY</button>
+    <button id="rec" class="chunk" type="button" aria-pressed="false" title="Record what you play into the playing step (Enter)">● REC</button>
+    <span class="pipe" aria-hidden="true">|</span>
     <label class="bpm"><input id="tempo" type="number" min="40" max="240" value="124" inputmode="numeric" aria-label="Tempo in BPM"> BPM</label>
     <span class="lamp" id="status" role="status">Audio is off</span>
   </div>
   <nav class="modes" role="tablist" aria-label="Editor">
     <button type="button" role="tab" data-tab="sound">SOUND</button>
-    <button type="button" role="tab" data-tab="matrix">MATRIX</button>
-    <button type="button" role="tab" data-tab="sequence">SEQUENCE</button>
-    <button type="button" role="tab" data-tab="effects">EFFECTS</button>
+    <button type="button" role="tab" data-tab="keys">KEYS</button>
+    <button type="button" role="tab" data-tab="sequence" aria-label="Sequence">SEQ</button>
+    <button type="button" role="tab" data-tab="matrix" aria-label="Mod matrix">MTX</button>
+    <button type="button" role="tab" data-tab="fx" aria-label="Effects">FX</button>
   </nav>
   <details class="menu" id="menu"><summary aria-label="Menu">☰</summary>
     <div class="menu-body">
-      <label class="fx-toggle"><input type="checkbox" id="fx-off"> FX OFF <small>(NO SCANLINES)</small></label>
-      <section><h2>KEYS</h2><p>THE COMPUTER KEYBOARD IS A PIANO: <kbd>A</kbd> TO <kbd>K</kbd> ARE THE WHITE KEYS, <kbd>W</kbd> <kbd>E</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> THE BLACK. <kbd>Z</kbd> / <kbd>X</kbd> OCTAVE DOWN / UP. HOLD <kbd>SHIFT</kbd> TO PLAY LOUDER. <kbd>SPACE</kbd> PLAYS / STOPS THE SEQUENCE, <kbd>ESC</kbd> SILENCES EVERYTHING.</p><p>KNOBS: DRAG UP / DOWN (SHIFT = FINE), MOUSE WHEEL OR ARROW KEYS. DOUBLE-CLICK RESETS.</p></section>
-      <section><h2>SHARE SOUND</h2><div class="file-actions"><button type="button" class="chunk" id="sound-export">DOWNLOAD .TXT</button><label class="file-pick">CHOOSE<input type="file" id="sound-file" accept=".txt,text/plain"></label></div><p id="sound-notice" class="file-notice" role="status"></p></section>
-      <section class="links"><a href="https://ghettomachine.bongcult.com/bongsynth/">ARCHITECTURE</a><a href="https://github.com/siddholdenried-del/bongsynth/archive/refs/tags/v0.1.1.zip">SOURCE CODE (GPLV3)</a><a href="https://ghettomachine.bongcult.com/">GHETTOMACHINE</a><a href="https://tools.bongcult.com/">AUDIO TOOLS</a></section>
+      <label class="fx-toggle"><input type="checkbox" id="fx-off"> FX OFF <small>(NO VHS TEXTURE)</small></label>
+      <section><h2>KEYS</h2><div class="keymap"><span><kbd>A</kbd>–<kbd>K</kbd> WHITE KEYS</span><span><kbd>W</kbd><kbd>E</kbd><kbd>T</kbd><kbd>Y</kbd><kbd>U</kbd> BLACK</span><span><kbd>Z</kbd><kbd>X</kbd> OCTAVE</span><span><kbd>ESC</kbd> SILENCE</span></div><p>SHIFT = LOUDER · SPACE = PLAY/STOP · ENTER = REC. DRAG KNOBS UP/DOWN (SHIFT = FINE), DOUBLE-CLICK TO RESET. DRAG A STEP'S NOTE UP/DOWN.</p></section>
+      <section><h2>SHARE SOUND</h2><div class="file-actions"><button type="button" class="chunk" id="sound-export">DOWNLOAD</button><label class="file-pick">CHOOSE OR DROP<input type="file" id="sound-file" accept=".txt,text/plain"></label></div><p id="sound-notice" class="file-notice" role="status"></p></section>
+      <section class="links"><a href="https://ghettomachine.bongcult.com/bongsynth/">ARCHITECTURE</a><a href="https://github.com/siddholdenried-del/bongsynth/archive/refs/tags/v0.2.0.zip">SOURCE CODE (GPLV3)</a><a href="https://bongcult.com/">BONGCULT</a><a href="https://tools.bongcult.com/">AUDIO TOOLS</a></section>
       <p class="credit">BONGSYNTH BY BONGSOFT · PROVIDED BY BONGTECH · PART OF BONGCULT. THE VOICE IS FELUCCA-ENGINES' ANALOG BY LEO KUROSHITA, HÜGELTON INSTRUMENTS (MIT); THE REVERB AND DELAY FROM X0X BY CHARLES VESTAL (GPL-3.0), AFTER 9W9.</p>
     </div>
   </details>
 </header>
 
 <main class="screen" id="screen">
+  <div class="lcd-pop" id="lcd-pop" aria-hidden="true"><span></span><output></output></div>
+
   <section class="view" data-view="sound" role="tabpanel" aria-label="Sound">
-    <div class="row">
-      <div class="picker"><span class="tag">SOUND</span><button type="button" class="chunk nudge" id="preset-prev" aria-label="Previous sound">‹</button><select id="preset" aria-label="Factory sound"></select><button type="button" class="chunk nudge" id="preset-next" aria-label="Next sound">›</button></div>
-      <div class="seg" role="group" aria-label="Voice mode"><button type="button" data-mono="1">MONO</button><button type="button" data-mono="0">POLY</button></div>
+    <div class="desk" data-desk="sound">
+      <div class="desk-top">
+        <button type="button" class="voice-pick" id="bank-pick" aria-haspopup="dialog" aria-label="Choose bank"><h2 id="bank-name">MOTOR CITY</h2><i aria-hidden="true">▾</i></button>
+        <button type="button" class="chunk preset-p" id="preset-p" aria-haspopup="dialog" aria-label="Sound">P</button>
+        <button id="audition" class="chunk blue" type="button" aria-label="Audition: play C3 while held">▶ AUDITION</button>
+      </div>
+      <div class="plot"><div class="readout"><output class="page-tag" aria-live="polite"></output><span class="ro-label"></span><output class="ro-value" aria-live="polite"></output><span class="readout-gap"></span><span class="ro-mode"></span><span class="lcd-hit" aria-hidden="true"></span></div>
+        <div class="plot-trace"><canvas aria-hidden="true"></canvas></div></div>
+      <div class="desk-row" role="group" aria-label="Page"><button type="button" class="page-arrow" data-dir="-1" aria-label="Previous page">◀</button><div class="desk-knobs" aria-label="Knobs"></div><button type="button" class="page-arrow" data-dir="1" aria-label="Next page">▶</button></div>
     </div>
-    <div class="pages" role="tablist" aria-label="Sound page" id="pages"></div>
-    <h2 class="page-title" id="page-title">OSC</h2>
-    <div class="knobs big" id="knobs"></div>
   </section>
 
-  <section class="view" data-view="matrix" role="tabpanel" aria-label="Mod matrix">
-    <p class="hint">SIX SLOTS. EACH ROUTES A SOURCE TO A DESTINATION BY AN AMOUNT (±64). LFO 1 IS THE ONE ON THE EFFECTS PAGE; LFO 2, MOD ENV AND THE MACROS ARE ON SOUND.</p>
-    <div class="matrix" id="matrix"></div>
+  <section class="view" data-view="keys" role="tabpanel" aria-label="Keys">
+    <div class="desk" data-desk="keys">
+      <div class="plot"><div class="readout"><output class="page-tag" id="oct-tag" aria-live="polite">C3–C5</output><span class="ro-label">PLAYED</span><output class="ro-value" id="keys-note">—</output><span class="readout-gap"></span><span class="ro-mode" id="keys-sound"></span><span class="lcd-hit" aria-hidden="true"></span></div>
+        <div class="plot-trace"><canvas id="keys-scope" aria-hidden="true"></canvas></div></div>
+      <div class="keys-row" role="group" aria-label="Keyboard"><button type="button" class="page-arrow" id="oct-down" aria-label="Octave down">◀</button><div class="piano" id="piano" role="group" aria-label="Piano. Press keys to play."></div><button type="button" class="page-arrow" id="oct-up" aria-label="Octave up">▶</button></div>
+    </div>
   </section>
 
   <section class="view" data-view="sequence" role="tabpanel" aria-label="Sequence">
-    <div class="row">
-      <div class="picker"><span class="tag">LOAD</span><select id="phrase" aria-label="Load a phrase"></select></div>
+    <div class="row seq-head">
+      <button type="button" class="chunk preset-p" id="phrase-p" aria-haspopup="dialog" aria-label="Phrase" title="Load a phrase">P</button>
       <button type="button" class="chunk blue" id="generate">⚄ GENERATE</button>
-      <div class="knob-slot" id="transpose-slot"></div>
+      <div id="transpose"></div>
       <button type="button" class="chunk" id="seq-clear">CLEAR</button>
     </div>
-    <div class="steps-wrap"><div class="steps" id="steps" role="group" aria-label="Sixteen steps"></div></div>
-    <p class="hint">TAP A STEP'S LAMP TO TURN IT ON. DRAG ITS NOTE UP OR DOWN (OR USE ▲ ▼). <b>ACC</b> PLAYS IT LOUDER WITH A FILTER SWEEP; <b>SLD</b> HOLDS IT INTO THE NEXT NOTE AND GLIDES, AS A 303. GENERATE WRITES A NEW LINE IN C MINOR.</p>
+    <div class="steps-wrap"><div class="steps" id="steps" role="group" aria-label="Sixteen steps. ON plays a step; drag a NOTE up or down; ACC is louder with a filter sweep; SLD holds into the next note and glides."></div></div>
   </section>
 
-  <section class="view" data-view="effects" role="tabpanel" aria-label="Effects">
-    <div class="fx-grid">
-      <div class="panel"><h2>LFO 1</h2><div class="knobs" id="lfo"></div></div>
-      <div class="panel"><h2>COLOR <span class="seg mini" role="group" aria-label="Color"><button type="button" data-color="0">OFF</button><button type="button" data-color="1">ON</button></span></h2><div class="knobs" id="color"></div></div>
-      <div class="panel"><h2>MIX</h2><div class="knobs" id="mix"></div></div>
-      <div class="panel"><h2>ROOM REVERB</h2><div class="knobs" id="reverb"></div></div>
-      <div class="panel wide"><h2>DELAY</h2><div class="knobs" id="delay"></div></div>
+  <section class="view" data-view="matrix" role="tabpanel" aria-label="Mod matrix">
+    <div class="desk" data-desk="matrix">
+      <div class="plot"><div class="readout"><output class="page-tag" aria-live="polite"></output><span class="ro-label"></span><output class="ro-value" aria-live="polite"></output><span class="readout-gap"></span><span class="ro-mode"></span><span class="lcd-hit" aria-hidden="true"></span></div>
+        <div class="plot-trace"><canvas aria-hidden="true"></canvas></div></div>
+      <div class="desk-row" role="group" aria-label="Slot"><button type="button" class="page-arrow" data-dir="-1" aria-label="Previous slot">◀</button><div class="desk-knobs" aria-label="Knobs"></div><button type="button" class="page-arrow" data-dir="1" aria-label="Next slot">▶</button></div>
+    </div>
+  </section>
+
+  <section class="view" data-view="fx" role="tabpanel" aria-label="Effects">
+    <div class="desk" data-desk="fx">
+      <div class="plot"><div class="readout"><output class="page-tag" aria-live="polite"></output><span class="ro-label"></span><output class="ro-value" aria-live="polite"></output><span class="readout-gap"></span><span class="ro-mode"></span><span class="lcd-hit" aria-hidden="true"></span></div>
+        <div class="plot-trace"><canvas aria-hidden="true"></canvas></div></div>
+      <div class="desk-row" role="group" aria-label="Page"><button type="button" class="page-arrow" data-dir="-1" aria-label="Previous page">◀</button><div class="desk-knobs" aria-label="Knobs"></div><button type="button" class="page-arrow" data-dir="1" aria-label="Next page">▶</button></div>
     </div>
   </section>
 </main>
-
-<footer class="keys-bar">
-  <div class="keys-side">
-    <div class="oct"><button type="button" class="chunk nudge" id="oct-down" aria-label="Octave down">−</button><span id="oct-read">C3</span><button type="button" class="chunk nudge" id="oct-up" aria-label="Octave up">+</button></div>
-    <div class="meter" aria-hidden="true"><i id="out-bar"></i></div>
-    <span class="voices" id="voices">0 VOICES</span>
-  </div>
-  <div class="piano" id="piano" role="group" aria-label="Keyboard. Press keys to play."></div>
-</footer>
+<footer class="brand-foot"><img class="bongsoft-mark" src="art/bongsoft-logo-cutout.webp" width="640" height="150" alt="BongSoft"></footer>
 </div>
+<div class="sheet" id="sheet" hidden><div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div class="sheet-head"><span id="sheet-title"></span><button type="button" class="chunk" id="sheet-close" aria-label="Close">✕</button></div><div class="sheet-grid" id="sheet-grid"></div></div></div>
 <script type="module" src="app.js"></script></body></html>

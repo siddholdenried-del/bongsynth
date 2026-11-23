@@ -241,3 +241,9 @@ float *gs_left(void) { return out_l; }
 float *gs_right(void) { return out_r; }
 float gs_peak(void) { float p = peak; peak = 0.0f; return p; }
 int gs_voices(void) { return syn_voices(TRK); }
+
+/* the track's newest voice, for the scopes (synth.h syn_probe): 0 pitch (1/16 semitone), 1 cutoff (0..127 << 8),
+ * 2 MOD ENV x 1000, 3 LFO 2 x 1000, 4 amplitude (Q15); -1 when nothing sounds */
+int gs_probe(int what) { return syn_probe(TRK, what); }
+/* every voice silenced at once, tails included: the page's own engine clears itself before it draws a waveform */
+void gs_kill(void) { syn_kill(); }

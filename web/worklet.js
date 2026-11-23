@@ -1,8 +1,11 @@
 import {boot,apply} from "./engine.js";
+const TRACE=6;   // render quanta (128 samples, 2.9 ms) per message: about 17 ms
 class BongSynth extends AudioWorkletProcessor{
   constructor(options){
-    super();const x=this.x=boot(options.processorOptions.module);this.last=-2;this.ticks=0;this.peak=0;
+    super();const x=this.x=boot(options.processorOptions.module);this.n=0;this.peak=0;
     this.left=new Float32Array(x.memory.buffer,x.gs_left(),256);this.right=new Float32Array(x.memory.buffer,x.gs_right(),256);
+    // the newest voice's amp envelope, cutoff, MOD ENV and LFO 2, once a quantum: the envelope scopes
+    this.trace=new Float32Array(TRACE*4);
     this.port.onmessage=({data:d})=>{
       switch(d.kind){
         case "state":apply(x,d.state);break;
@@ -32,8 +35,13 @@ class BongSynth extends AudioWorkletProcessor{
       l.set(this.left.subarray(0,n),at);r.set(this.right.subarray(0,n),at);
       this.peak=Math.max(this.peak,x.gs_peak());
     }
-    const step=x.gs_step();
-    if(step!==this.last||++this.ticks>=12){this.port.postMessage({step,peak:this.peak,voices:x.gs_voices()});this.last=step;this.ticks=0;this.peak=0;}
+    const amp=x.gs_probe(4),t=this.trace,i=this.n*4;
+    if(amp<0){t[i]=0;t[i+1]=-1;t[i+2]=-1;t[i+3]=0;}
+    else{t[i]=amp/32768;t[i+1]=x.gs_probe(1)/32512;t[i+2]=x.gs_probe(2)/1000;t[i+3]=x.gs_probe(3)/1000;}
+    if(++this.n>=TRACE){
+      this.port.postMessage({step:x.gs_step(),peak:this.peak,voices:x.gs_voices(),trace:t.slice()});
+      this.n=0;this.peak=0;
+    }
     return true;
   }
 }

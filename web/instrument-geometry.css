@@ -1,0 +1,96 @@
+/* Shared BongSoft panel geometry. Palette and DSP remain instrument-specific.
+ * Keep this byte-identical in both instrument packages. */
+:root {
+  --desk-dial-fixed: 82px;
+  --desk-label-fixed: 18px;
+  --desk-value-fixed: 20px;
+  --desk-caption-fixed: 24px;
+  --desk-row-fixed: 172px;
+  --desk-word-fixed: 24px;
+  --desk-word-box: 11ch;
+  --desk-name-box: 14ch;
+  --desk-arrow-fixed: 44px;
+}
+.word {
+  flex: 0 0 var(--desk-word-box);
+  font-size: var(--desk-word-fixed);
+  letter-spacing: .04em;
+}
+.desk .voice-pick h2 {
+  display: block;
+  width: var(--desk-name-box);
+  min-width: 0;
+  font-size: var(--desk-caption-fixed);
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.desk .page-tag {
+  display: block;
+  width: var(--desk-name-box);
+  min-width: 0;
+  font-size: var(--desk-caption-fixed);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.desk .readout {
+  align-items: center;
+  flex: 0 0 36px;
+  min-height: 36px;
+}
+.desk .desk-row {
+  height: var(--desk-row-fixed);
+  min-height: var(--desk-row-fixed);
+}
+.desk .desk-row > .page-arrow { width: var(--desk-arrow-fixed); }
+:where(.desk-knobs,.knobs.big,.lfo-centre) .knob .dial {
+  width: var(--desk-dial-fixed);
+}
+/* More-specific than the former per-view fitters and mobile overrides. */
+.desk .desk-knobs .knob .dial,
+.view .knobs.big .knob .dial,
+.view .lfo-centre .knob .dial {
+  width: var(--desk-dial-fixed);
+  height: var(--desk-dial-fixed);
+  flex: none;
+}
+.desk .desk-knobs .knob .kl,
+.view .knobs.big .knob .kl,
+.view .lfo-centre .knob .kl {
+  font-size: var(--desk-label-fixed);
+  line-height: 1.1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.desk .desk-knobs .knob .kv,
+.view .knobs.big .knob .kv,
+.view .lfo-centre .knob .kv {
+  font-size: var(--desk-value-fixed);
+  line-height: 1.1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.desk .desk-knobs .knob .kl,
+.desk .desk-knobs .knob .kv {
+  height: 2.2em;
+  min-height: 2.2em;
+  overflow: hidden;
+  display: grid;
+  align-content: center;
+}
+@media (max-width:640px) {
+  :root {
+    --desk-dial-fixed: 47px;
+    --desk-label-fixed: 14px;
+    --desk-value-fixed: 15px;
+    --desk-caption-fixed: 15px;
+    --desk-row-fixed: 144px;
+    --desk-word-fixed: 16px;
+    --desk-name-box: 12ch;
+    --desk-arrow-fixed: 29px;
+  }
+  .desk .desk-knobs .knob .kl { height: 3.3em; min-height: 3.3em; align-content: start; }
+  .desk .readout { flex-basis: 28px; min-height: 28px; }
+}

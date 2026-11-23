@@ -1,3 +1,4 @@
+import {signalStages,flowStages} from "./signal-flow.mjs";
 import {deskPosition} from "./desk-status.mjs";
 import {boot,apply} from "./engine.js";
 import {$,make,knob,openSheet,wireSheet,stepper} from "./controls.js";
@@ -60,13 +61,13 @@ const ENV_OF={};for(const e of [AMP,FENV,MENV])for(const id of e)ENV_OF[id]=e;
 function soundSpec(id){
   const fmt=v=>str(x.gs_param_text(id,v)),opt=x.gs_param_fmt(id)===SF_ENUM;
   const kind=ENV_OF[id]?"adsr":CYCLE.has(id)?"cycle":RESPONSE.has(id)?"response":id===7?"drive":id===17?"glide":[42,43,44].includes(id)?"lfo2":opt?"steps":"level";
-  return {label:str(x.gs_param_name(id)),min:x.gs_param_min(id),max:x.gs_param_max(id),def:x.gs_param_def(id),fmt,kind,env:ENV_OF[id],
+  return {soundId:id,label:str(x.gs_param_name(id)),min:x.gs_param_min(id),max:x.gs_param_max(id),def:x.gs_param_def(id),fmt,kind,env:ENV_OF[id],
     get:()=>state.sound[id],set:v=>{if(!x.gs_set(id,v))return;state.sound[id]=v;send("set",{id,value:v});cycleDirty=true;markCustom();persist();}};
 }
-const modeSpec=()=>({label:"MODE",min:0,max:1,def:1,kind:"steps",fmt:v=>v?"MONO":"POLY",get:()=>state.mono?1:0,
+const modeSpec=()=>({flow:"mod",label:"MODE",min:0,max:1,def:1,kind:"steps",fmt:v=>v?"MONO":"POLY",get:()=>state.mono?1:0,
   set:v=>{state.mono=!!v;send("mono",{value:state.mono});x.gs_mono(v);cycleDirty=true;markCustom();persist();}});
 const pct=v=>Math.round(v/1.27)+"%";
-const levelSpec=()=>({label:"LEVEL",min:0,max:127,def:100,kind:"level",fmt:pct,get:()=>state.level,set:v=>{state.level=v;send("level",{value:v});persist();}});
+const levelSpec=()=>({flow:"amp",label:"LEVEL",min:0,max:127,def:100,kind:"level",fmt:pct,get:()=>state.level,set:v=>{state.level=v;send("level",{value:v});persist();}});
 const page=(name,ids)=>({name,specs:ids.map(id=>id==="M"?modeSpec():id==="L"?levelSpec():soundSpec(id))});
 // The firmware's EDIT and ENV pages, named, four knobs each, as the FM-1's four encoders.
 const SOUND_PAGES=()=>[page("OSC",[0,1,2,3]),page("TONE",[4,5,6,7]),page("FILTER",[8,9,10,11]),page("AMP ENV",AMP),page("FILTER ENV",FENV),
@@ -79,13 +80,13 @@ const lfoHz=r=>.05*Math.pow(400,r/127);
 const hzText=h=>(h<1?h.toFixed(2):h.toFixed(1))+" HZ";
 function fxSpec(i,label,kind){
   const max=x.gs_fx_max(i),opt=max<127;
-  return {label,min:0,max,def:x.gs_fx_def(i),kind:kind||(opt?"steps":"level"),fmt:v=>opt?str(x.gs_fx_option(i,v)):String(v),
+  return {fxId:i,label,min:0,max,def:x.gs_fx_def(i),kind:kind||(opt?"steps":"level"),fmt:v=>opt?str(x.gs_fx_option(i,v)):String(v),
     get:()=>state.fx[i],set:v=>{state.fx[i]=v;send("fx",{index:i,value:v});persist();}};
 }
-const lfoSpec=(k,label,min,max,def,fmt,kind)=>({label,min,max,def,fmt,kind,get:()=>state.lfo[k],set:v=>{state.lfo[k]=v;send("lfo",{value:state.lfo});persist();}});
-const colorSpec=(k,label)=>({label,min:0,max:k===5?1:127,def:0,kind:k===5?"steps":"level",fmt:v=>k===5?(v?"ON":"OFF"):String(v),get:()=>state.color[k],
+const lfoSpec=(k,label,min,max,def,fmt,kind)=>({trackLfo:true,label,min,max,def,fmt,kind,get:()=>state.lfo[k],set:v=>{state.lfo[k]=v;send("lfo",{value:state.lfo});persist();}});
+const colorSpec=(k,label)=>({flow:"color",label,min:0,max:k===5?1:127,def:0,kind:k===5?"steps":"level",fmt:v=>k===5?(v?"ON":"OFF"):String(v),get:()=>state.color[k],
   set:v=>{state.color[k]=v;send("color",{index:k,value:v});x.gs_color(k,v);cycleDirty=true;markCustom();persist();}});
-const mixSpec=(key,label,def,fmt,kind,write)=>({label,min:0,max:127,def,fmt,kind,get:()=>state[key],set:v=>{state[key]=v;write(v);persist();}});
+const mixSpec=(key,label,def,fmt,kind,write)=>({mixKey:key,label,min:0,max:127,def,fmt,kind,get:()=>state[key],set:v=>{state[key]=v;write(v);persist();}});
 const FX_PAGES=()=>[
   {name:"LFO 1",specs:[lfoSpec(0,"SHAPE",0,4,0,v=>LFO_SHAPES[v],"lfo1"),lfoSpec(1,"RATE",0,127,40,v=>hzText(lfoHz(v)),"lfo1"),
     lfoSpec(2,"DEPTH",-64,63,0,v=>(v>0?"+":"")+v,"lfo1"),lfoSpec(3,"DEST",0,9,0,v=>LFO_DEST[v],"steps")]},
@@ -130,9 +131,36 @@ function buildDesk(d){
   fitDesk(d);focusSlot(d,Math.min(d.focus,d.specs.length-1));
 }
 function focusSlot(d,slot){d.focus=Math.max(0,slot);d.els.forEach((k,i)=>k.classList.toggle("on",i===d.focus));readout(d);}
+const FLOW_LABELS={osc:["OSC","O","Oscillators"],shape:["SHP","S","Voice shaper"],drive:["DRV","D","Drive"],filter:["FLT","F","Filter"],amp:["AMP","A","Amplitude"],color:["CLR","C","COLOR insert"],dry:["DRY","DR","Dry mix"],room:["RVB","R","ROOM reverb"],delay:["DLY","DL","Delay"],out:["OUT","OUT","Output"],mod:["MOD","M","Control setting, no direct audio stage"]};
+function highlightFlow(d,s){
+  const flow=d.root.querySelector(".signal-flow"),order=signalStages(state),key=order.join(" ");
+  if(flow.dataset.order!==key){
+    const node=id=>make("span",FLOW_LABELS[id][0],{"data-stage":id,"data-small":FLOW_LABELS[id][1],title:FLOW_LABELS[id][2]});
+    const sep=text=>make("span",text,{class:"signal-sep"});
+    const nodes=[];
+    for(const id of order){
+      if(nodes.length)nodes.push(sep("›"));
+      if(id==="parallel"){
+        const branch=make("span",null,{class:"signal-branches",title:"Dry, ROOM reverb and delay in parallel"});
+        branch.append(node("dry"),sep("+"),node("room"),sep("+"),node("delay"));nodes.push(branch);
+      }else nodes.push(node(id));
+    }
+    nodes.push(node("mod"));
+    const row=make("span",null,{class:"signal-chain","aria-hidden":"true"});
+    row.append(...nodes);flow.replaceChildren(row);
+    flow.setAttribute("role","img");flow.dataset.order=key;
+  }
+  const active=flowStages(s,state);
+  for(const node of flow.querySelectorAll("[data-stage]"))node.classList.toggle("active",active.includes(node.dataset.stage));
+  flow.setAttribute("aria-label","Signal flow: "+order.map(id=>id==="parallel"?"dry, ROOM reverb and delay in parallel":FLOW_LABELS[id][2]).join(", then ")+". Current setting: "+active.map(id=>FLOW_LABELS[id][2]).join(", ")+".");
+}
+const SHORT_READOUT={"SOURCE":"SRC","AMOUNT":"AMT","REVERB SEND":"RV SND","DELAY SEND":"DL SND","FEEDBACK":"FDBK","RESONANCE":"RES","LOW CUT":"LO CUT","PING-PONG":"PING","DECAY":"DEC","RETURN":"RTN","SHAPE":"SHP","VOLUME":"VOL","WIDTH":"WID"};
 function readout(d){
   const s=d.specs[d.focus];if(!s)return;
-  d.label.textContent=s.label.toUpperCase();d.value.value=s.fmt(s.get()).toUpperCase();if(d.mode)d.mode.textContent=d.modeFn?.()||"";
+  highlightFlow(d,s);
+  const label=s.label.toUpperCase();
+  d.label.textContent=label;d.label.dataset.short=SHORT_READOUT[label]||label;
+  d.label.title=label;d.value.value=s.fmt(s.get()).toUpperCase();if(d.mode)d.mode.textContent=d.modeFn?.()||"";
 }
 function turnPage(d,dir){const n=d.pagesFn().length;state.pages[d.name]=((state.pages[d.name]||0)+dir+n)%n;d.focus=0;buildDesk(d);persist();}
 // BongDrums' fit: the dial from the room in the row and the narrowest knob.

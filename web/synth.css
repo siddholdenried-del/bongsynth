@@ -100,3 +100,36 @@ body[data-view=matrix] .view[data-view=matrix],body[data-view=fx] .view[data-vie
 .brand-foot{position:relative}
 .dsp-load{position:absolute;inset-inline-start:0;inset-block-end:0;display:flex;gap:.55ch;align-items:center;padding:0 .45ch;min-width:6ch;color:var(--dim);font-size:var(--t-s);font-variant-numeric:tabular-nums;white-space:nowrap}
 .dsp-load b{color:var(--cream)}
+
+/* The flow replaces spare readout space; all desktop and mobile boxes stay put. */
+.readout:has(.signal-flow) .readout-gap{flex:0 1 auto}
+.readout:has(.signal-flow) .ro-mode{margin-inline-end:auto}
+.signal-flow{flex:none;margin-inline-start:auto;color:var(--screen-dim);font:700 var(--t-s)/1.15 var(--mono)}
+.signal-chain,.signal-branches{display:inline-flex;align-items:center;gap:.34ch}
+.signal-sep{color:var(--screen-dim);font-weight:400}
+.signal-branches{padding:0 .32ch;border-inline:1px solid var(--screen-dim)}
+.signal-chain [data-stage].active{color:var(--screen-accent);text-decoration:underline;text-underline-offset:.19em}
+.signal-chain [data-stage=mod]{display:none}
+.signal-chain [data-stage=mod].active{display:inline;margin-inline-start:.55ch;border-inline-start:1px solid var(--screen-dim);padding-inline-start:.45ch}
+@media(max-width:640px){
+  .readout:has(.signal-flow){gap:calc(var(--u)*2)}
+  .readout:has(.signal-flow) .readout-gap,.readout:has(.signal-flow) .lcd-hit{display:none}
+  .readout:has(.signal-flow) .ro-value{font-size:var(--t-s)}
+  .signal-flow{font-size:clamp(8px,2.34vw,11px)}
+  .signal-chain [data-stage]{font-size:0}
+  .signal-chain [data-stage]::after{content:attr(data-small);font-size:clamp(8px,2.34vw,11px)}
+  .signal-chain [data-stage=mod].active{margin-inline-start:2px;padding-inline-start:2px}
+}
+@media(max-width:640px){
+  .signal-chain,.signal-branches{gap:1px}
+  .signal-chain>.signal-sep{display:none}
+  .signal-chain .signal-branches{margin-inline:1px;padding-inline:2px}
+}
+@media(max-width:440px){
+  .desk .readout:has(.signal-flow) .page-tag{font-size:13px;letter-spacing:0}
+  .readout:has(.signal-flow) .ro-value{font-size:12px}
+}
+@media(max-width:440px){
+  .readout:has(.signal-flow) .ro-label{font-size:0}
+  .readout:has(.signal-flow) .ro-label::after{content:attr(data-short);font-size:10px}
+}

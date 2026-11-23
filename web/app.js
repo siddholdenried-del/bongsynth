@@ -97,8 +97,8 @@ function makeDesk(name,pagesFn,modeFn){
   const d={name,root,canvas:root.querySelector(".plot-trace canvas"),box:root.querySelector(".desk-knobs"),tag:root.querySelector(".page-tag"),
     label:root.querySelector(".ro-label"),value:root.querySelector(".ro-value"),mode:root.querySelector(".ro-mode"),focus:0,specs:[],els:[],pagesFn,modeFn};
   d.arrows=[...root.querySelectorAll(".page-arrow")];
+  d.readbacks=[...root.querySelectorAll(".deck-readback")];
   d.arrows.forEach(b=>b.onclick=()=>turnPage(d,+b.dataset.dir));
-  new ResizeObserver(()=>fitDesk(d)).observe(d.box);
   desks[name]=d;return d;
 }
 function buildDesk(d){
@@ -120,7 +120,13 @@ function buildDesk(d){
     kn.addEventListener("focusin",()=>focusSlot(d,slot));kn.addEventListener("pointerdown",()=>focusSlot(d,slot));
     d.box.append(kn);d.els.push(kn);
   });
-  fitDesk(d);focusSlot(d,Math.min(d.focus,d.specs.length-1));
+  for(let slot=d.specs.length;slot<4;slot++){
+    const empty=knob({id:d.name+"-unused-"+slot,label:"Unused slot",min:0,max:1,value:0,onInput:()=>{},cls:"deck-empty"});
+    empty.input.disabled=true;empty.setAttribute("aria-hidden","true");
+    empty.querySelector(".dial").style.pointerEvents="none";
+    d.box.append(empty);
+  }
+  focusSlot(d,Math.min(d.focus,d.specs.length-1));
 }
 function focusSlot(d,slot){d.focus=Math.max(0,slot);d.els.forEach((k,i)=>k.classList.toggle("on",i===d.focus));readout(d);}
 const FLOW_LABELS={osc:["OSC","O","Oscillators"],shape:["SHP","S","Voice shaper"],drive:["DRV","D","Drive"],filter:["FLT","F","Filter"],amp:["AMP","A","Amplitude"],dry:["DRY","DR","Dry mix"],out:["OUT","OUT","Output"],mod:["MOD","M","Control setting, no direct audio stage"]};
@@ -162,6 +168,13 @@ function highlightFlow(d,s){
 const SHORT_READOUT={"SOURCE":"SRC","AMOUNT":"AMT","RESONANCE":"RES","SHAPE":"SHP","VOLUME":"VOL"};
 function readout(d){
   const s=d.specs[d.focus];if(!s)return;
+  d.readbacks.forEach((cell,i)=>{
+    const spec=d.specs[i];
+    cell.toggleAttribute("data-empty",!spec);
+    cell.classList.toggle("is-focused",i===d.focus);
+    cell.querySelector("span").textContent=spec?spec.label.toUpperCase():"—";
+    cell.querySelector("output").value=spec?spec.fmt(spec.get()).toUpperCase():"";
+  });
   highlightFlow(d,s);
   const label=s.label.toUpperCase();
   d.label.textContent=label;d.label.dataset.short=SHORT_READOUT[label]||label;
@@ -175,12 +188,6 @@ function jumpToStage(id){
   if(index<0)return;
   if(document.body.dataset.view!==view){selectView(view);showDeskPage(d,index,slot);d.els[d.focus]?.input.focus({preventScroll:true});}
   else showDeskPage(d,index,slot);
-}
-// BongDrums' fit: the dial from the room in the row and the narrowest knob.
-function fitDesk(d){
-  const box=d.box,h=box.clientHeight;if(!h)return;
-  let text=0,w=1e9;for(const k of box.querySelectorAll(".knob")){text=Math.max(text,(k.querySelector(".kl")?.offsetHeight||0)+(k.querySelector(".kv")?.offsetHeight||0));w=Math.min(w,k.clientWidth);}
-  box.style.setProperty("--dial",Math.round(Math.max(40,Math.min(200,w-unit()*2,h-text-unit()*4)))+"px");
 }
 const rebuildDesks=()=>Object.values(desks).forEach(buildDesk);
 
@@ -468,7 +475,6 @@ try{
   const view=t=>{
     if(!VIEWS.includes(t))t="sound";const changed=document.body.dataset.view!==t;document.body.dataset.view=t;
     tabs.forEach(b=>b.setAttribute("aria-selected",String(b.dataset.tab===t)));try{sessionStorage.setItem(KEY+"-view",t);}catch{}
-    if(desks[t])fitDesk(desks[t]);
     if(changed){const s=$("screen");s.classList.remove("fringe");void s.offsetWidth;s.classList.add("fringe");}
   };
   selectView=view;

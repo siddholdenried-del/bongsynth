@@ -142,3 +142,6 @@ body[data-view=matrix] .view[data-view=matrix],body[data-view=fx] .view[data-vie
 @media(max-width:640px){
   .signal-chain button[data-stage]{font-size:0;min-width:16px;padding-inline:2px}
 }
+
+/* Parameter labels leave the top strip for the fixed four-way readback inside the scope. */
+.fixed-deck .readout > :is(.ro-label,.ro-value){display:none}

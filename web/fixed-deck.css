@@ -1,0 +1,62 @@
+/* BongEngine fixed control deck geometry. Keep this identical in both editors. */
+.fixed-deck {
+  --deck-flank:69px; --deck-gap:10px; --deck-dial:64px;
+  --deck-readback:56px; --deck-row:105px; --deck-toolbar:47px;
+  --deck-label:12px; --deck-value:16px; --deck-label-row:26px;
+}
+.fixed-deck > .desk-top {flex:0 0 var(--deck-toolbar);min-height:var(--deck-toolbar)}
+.fixed-deck:not(:has(> .desk-top))::before {content:"";flex:0 0 var(--deck-toolbar)}
+.desk.fixed-deck .deck-readbacks,.desk.fixed-deck > .desk-row {
+  display:grid;
+  grid-template-columns:var(--deck-flank) repeat(4,minmax(0,1fr)) var(--deck-flank);
+  column-gap:var(--deck-gap);
+  inline-size:100%;min-inline-size:0;
+  margin-inline:0;padding-inline:0;border-inline:0;
+}
+.desk.fixed-deck .deck-readbacks {
+  flex:0 0 var(--deck-readback);min-height:var(--deck-readback);grid-template-rows:minmax(0,1fr);
+  border-top:1px solid var(--screen-frame,var(--ring));background:#0003;
+}
+.deck-readback {min-width:0;min-height:0;display:grid;grid-template-rows:var(--deck-label-row) minmax(0,1fr);text-align:center;padding:3px 1px}
+.deck-readback:first-child {grid-column:2}
+.deck-readback > span,.deck-readback > output {
+  display:flex;align-items:center;justify-content:center;min-width:0;
+  text-align:center;font-weight:700;line-height:1.03;overflow-wrap:anywhere;
+}
+.deck-readback > span {font-size:var(--deck-label);color:var(--screen-ink,var(--cream))}
+.deck-readback > output {font-size:var(--deck-value);color:var(--screen-accent,var(--amber))}
+.deck-readback[data-empty] {opacity:.42}
+.deck-readback.is-focused > span {color:var(--screen-accent,var(--amber))}
+.desk.fixed-deck > .desk-row {
+  flex:none;height:var(--deck-row);min-height:var(--deck-row);align-items:center;
+}
+.desk.fixed-deck .desk-knobs {
+  display:grid;grid-column:2 / 6;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:var(--deck-gap);width:100%;align-items:center;
+}
+.desk.fixed-deck .desk-knobs > .knob {min-width:0;align-items:center;justify-content:center}
+/* Keep the form's original accessible names/values without duplicate print below. */
+.desk.fixed-deck .desk-knobs > .knob > :is(.kl,.kv) {
+  position:absolute;inline-size:1px;block-size:1px;min-block-size:0;padding:0;margin:0;
+  overflow:hidden;clip-path:inset(50%);white-space:nowrap;
+}
+.desk.fixed-deck .desk-knobs .knob .dial {width:var(--deck-dial);height:var(--deck-dial);flex:none}
+.desk.fixed-deck .desk-knobs .deck-empty .dial {opacity:.28;cursor:default}
+.desk.fixed-deck > .desk-row > .page-arrow {
+  width:100%;height:53px;min-width:0;min-height:44px;font-size:0;padding:0;
+  border:1px solid var(--ring);border-radius:3px;
+}
+.desk.fixed-deck > .desk-row > .page-arrow > svg {
+  display:block;width:82%;height:32px;margin:auto;fill:currentColor;pointer-events:none;
+}
+.desk.fixed-deck > .desk-row > .page-arrow:last-child > svg {transform:scaleX(-1)}
+.desk.fixed-deck > .desk-row > .page-arrow:focus-visible {outline:2px solid currentColor;outline-offset:3px}
+@media(max-width:640px){
+  .fixed-deck {
+    --deck-flank:37px;--deck-gap:4px;--deck-dial:41px;
+    --deck-readback:55px;--deck-row:76px;--deck-toolbar:38px;
+    --deck-label:9px;--deck-value:12px;--deck-label-row:20px;
+  }
+  .desk.fixed-deck > .desk-row > .page-arrow {height:44px}
+  .desk.fixed-deck > .desk-row > .page-arrow > svg {height:28px}
+}

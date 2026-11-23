@@ -1,17 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* BongSynth: GhettoMachine's instrument-track synth (dsp/synth.c, unchanged) on one track, for the browser.
- * The firmware's own path, cut down to one instrument track:
- *   keys / sequencer -> syn_note_on_f -> syn_prepare, syn_half(0), syn_half(1) -> track insert (COLOR)
- *   -> syn_mix (level, pan, reverb and delay sends) -> fxbus (ROOM reverb, tempo delay) -> out
+ * One dry instrument track: keys / sequencer -> voice shaper, drive, filter and amp
+ *   -> stereo level/pan mix -> master volume -> out. There are no inserts or effect returns.
  * Everything runs in blocks of SYN_CTL (32) samples at 44.1 kHz, as on the FM-1. */
 #include <stdint.h>
 #include <stddef.h>
 #include "synth.h"
-#include "color.h"
-#include "preset_color.h"
-#define X0X_DRUM_TABLES_DEFINE
-#include "x0x_drum_tables.h"
-#include "fxbus.h"
+
 
 #define TRK 1
 #define OUT_MAX 256
@@ -19,13 +14,10 @@
 #define FS 44100.0f
 
 static float out_l[OUT_MAX], out_r[OUT_MAX];
-static float bl[SYN_CTL], br[SYN_CTL], brv[SYN_CTL], bdl[SYN_CTL], fl[SYN_CTL], fr[SYN_CTL];
-static int16_t dline[44100];
-static fxbus_t bus;
+static float bl[SYN_CTL], br[SYN_CTL], unused_rev[SYN_CTL], unused_dly[SYN_CTL];
 static int8_t snd[SP_NUM];
-static int mono = 1, level = 100, pan = 64, rsend = 20, dsend = 12;
-static color_params_t col;
-static color_state_t col_rt;
+static int mono = 1, level = 100, pan = 64;
+static float volume = 44.0f / 127.0f;
 static char text[32];
 static float peak;
 
@@ -39,23 +31,12 @@ static int lfo_shape, lfo_rate = 40, lfo_depth, lfo_dest;
 static float lfo_ph, lfo_sh = 0.0f;
 static uint32_t rnd = 22222u;
 
-static int insert(int trk, float *l, float *r, unsigned n)
-{
-    (void)trk;
-    color_run(&col_rt, &col, l, r, n);
-    return 0;
-}
-static void route(void) { syn_set_insert(TRK, color_active(&col) ? insert : 0); }
-static void mixer(void) { syn_mixer(TRK, pan, (float)rsend / 127.0f, (float)dsend / 127.0f); }
+static void mixer(void) { syn_mixer(TRK, pan, 0.0f, 0.0f); }
 
 void gs_init(void)
 {
     int i;
     syn_init();
-    fxbus_init(&bus, dline, (int)(sizeof dline / sizeof dline[0]));
-    fxbus_set_bpm(&bus, bpm);
-    color_defaults(&col);
-    color_reset(&col_rt);
     for (i = 0; i < STEPS; i++) {
         st_note[i] = 36;
         st_flag[i] = 0;
@@ -64,7 +45,6 @@ void gs_init(void)
     syn_sound(TRK, snd);
     syn_level(TRK, (float)(level * level) / 16129.0f);
     mixer();
-    route();
 }
 
 /* ---- the sound ---- */
@@ -94,8 +74,7 @@ int gs_set(int id, int v)
 }
 int gs_presets(void) { return syn_presets(); }
 const char *gs_preset_name(int i) { return i >= 0 && i < syn_presets() ? syn_preset_name(i) : NULL; }
-int gs_preset_color(int i) { return syn_preset_color(i); }
-/* a factory sound, as the firmware loads one: its parameters, MONO or POLY, and its COLOR recipe */
+/* Factory voice parameters and MONO/POLY use their existing indexes. */
 int gs_preset(int i)
 {
     if (i < 0 || i >= syn_presets())
@@ -103,47 +82,22 @@ int gs_preset(int i)
     syn_release(TRK, 0);
     mono = syn_preset(i, snd);
     syn_sound(TRK, snd);
-    if (preset_color_apply(&col, syn_preset_color(i))) {
-        color_reset(&col_rt);
-        route();
-    }
     return mono;
 }
 void gs_mono(int m) { if (m != mono) { syn_release(TRK, 0); mono = m ? 1 : 0; } }
 int gs_is_mono(void) { return mono; }
 
-/* COLOR, the track's post-send texture: 0 AMOUNT, 1 WEAR, 2 WOW, 3 DIGITAL, 4 DROP (0..127), 5 ON (0/1) */
-void gs_color(int k, int v)
-{
-    if (k < 0 || k >= COL_NUM || v < 0 || v > (k == COL_ON ? 1 : 127))
-        return;
-    col.v[k] = (uint8_t)v;
-    route();
-}
-int gs_color_get(int k) { return k >= 0 && k < COL_NUM ? col.v[k] : 0; }
-
-/* ---- the mix and the send effects ---- */
+/* ---- dry stereo output ---- */
 void gs_level(int v) { if (v >= 0 && v <= 127) { level = v; syn_level(TRK, (float)(v * v) / 16129.0f); } }
 void gs_pan(int v) { if (v >= 0 && v <= 127) { pan = v; mixer(); } }
-void gs_send(int which, int v) { if (v >= 0 && v <= 127) { if (which) dsend = v; else rsend = v; mixer(); } }
-int gs_fx_count(void) { return fxbus_nparams(); }
-const char *gs_fx_name(int i) { const x0x_param_t *p = fxbus_param(i); return p ? p->name : NULL; }
-int gs_fx_max(int i) { const x0x_param_t *p = fxbus_param(i); return p ? p->max : 0; }
-int gs_fx_def(int i) { const x0x_param_t *p = fxbus_param(i); return p ? p->def : 0; }
-const char *gs_fx_option(int i, int v)
-{
-    const x0x_param_t *p = fxbus_param(i);
-    return p && p->names && v >= 0 && v <= p->max ? p->names[v] : NULL;
-}
-void gs_fx(int i, int v) { if (i >= 0 && i < fxbus_nparams() && v >= 0 && v <= fxbus_param(i)->max) fxbus_set(&bus, i, v); }
-int gs_fx_get(int i) { return fxbus_get(&bus, i); }
+void gs_volume(int v) { if (v >= 0 && v <= 127) volume = (float)v / 127.0f; }
 
 /* ---- playing it ---- */
 void gs_note_on(int note, int vel) { if (note >= 0 && note < 128) syn_note_on(TRK, note, (float)vel / 127.0f, -1, mono); }
 void gs_note_off(int note) { if (note >= 0 && note < 128) syn_note_off(TRK, note); }
 void gs_panic(void) { syn_release(TRK, 0); }
 
-void gs_tempo(int bpm10) { if (bpm10 >= 400 && bpm10 <= 2400) { bpm = (float)bpm10 * 0.1f; fxbus_set_bpm(&bus, bpm); } }
+void gs_tempo(int bpm10) { if (bpm10 >= 400 && bpm10 <= 2400) { bpm = (float)bpm10 * 0.1f; } }
 void gs_step_set(int i, int note, int flags)
 {
     if (i < 0 || i >= STEPS || note < 0 || note > 127)
@@ -226,10 +180,9 @@ void gs_render(int n)
         syn_prepare();
         syn_half(0);
         syn_half(1);
-        syn_mix(bl, br, brv, bdl);
-        fxbus_process_st(&bus, bl, br, brv, bdl, fl, fr, SYN_CTL);
+        syn_mix(bl, br, unused_rev, unused_dly);
         for (i = 0; i < SYN_CTL && at + i < n; i++) {
-            float a = fl[i], b = fr[i];
+            float a = bl[i] * volume, b = br[i] * volume;
             float m = (a < 0 ? -a : a) > (b < 0 ? -b : b) ? (a < 0 ? -a : a) : (b < 0 ? -b : b);
             if (m > peak) peak = m;
             out_l[at + i] = a;

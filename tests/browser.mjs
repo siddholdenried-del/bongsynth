@@ -28,7 +28,7 @@ try{
   const bounds={};
   for(const [which,url] of [['baseline',base],['candidate',candidate]]){
    await cmd('Page.navigate',{url});await poll("document.querySelector('[data-desk=sound] .page-tag')?.textContent.trim()");
-   for(const [view,count] of [['sound',12],['matrix',6],['fx',8]]){
+   for(const [view,count] of [['sound',12],['matrix',6],['fx',2]]){
     await js(`document.querySelector('[data-tab=${view}]').click()`);
     if(which==='baseline'){bounds[view]=await geometry();continue;}
     assert.deepEqual(await geometry(),bounds[view],view+' changed desk geometry');
@@ -41,7 +41,7 @@ try{
     assert.equal(page.startName,page.start.split(': ')[1]);
     assert.equal(page.endName,page.end.split(': ')[1]);
     assert.match(page.next,/^Next page: /);
-    assert.equal(page.length,view==='matrix'?3:4);
+    assert.equal(page.length,view==='matrix'?3:view==='fx'?2:4);
     const shot=await cmd('Page.captureScreenshot',{format:'png'});await writeFile('/tmp/bong-next/synth-'+view+'-'+width+'.png',Buffer.from(shot.data,'base64'));
    }
   }

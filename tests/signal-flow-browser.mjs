@@ -28,7 +28,7 @@ try{
   const bounds={};
   for(const [which,url] of [['baseline',base],['candidate',candidate]]){
    await cmd('Page.navigate',{url});await poll("document.querySelector('[data-desk=sound] .page-tag')?.textContent.trim()");
-   for(const [view,count] of [['sound',12],['matrix',6],['fx',8]]){
+   for(const [view,count] of [['sound',12],['matrix',6],['fx',2]]){
     await js(`document.querySelector('[data-tab=${view}]').click()`);
     if(which==='baseline'){bounds[view]=await geometry();continue;}
     assert.deepEqual(await geometry(),bounds[view],view+' changed desk geometry');
@@ -41,10 +41,10 @@ try{
     assert.equal(page.startName,page.start.split(': ')[1]);
     assert.equal(page.endName,page.end.split(': ')[1]);
     assert.match(page.next,/^Next page: /);
-    assert.equal(page.length,view==='matrix'?3:4);
+    assert.equal(page.length,view==='matrix'?3:view==='fx'?2:4);
     const flow=await js(`(()=>{const d=document.querySelector('[data-desk=${view}]'),f=d.querySelector('.signal-flow'),c=f.querySelector('.signal-chain').getBoundingClientRect(),b=d.querySelector('.plot').getBoundingClientRect();return {active:[...f.querySelectorAll('.active')].map(x=>x.dataset.stage),branches:[...f.querySelectorAll('.signal-branches [data-stage]')].map(x=>x.dataset.stage),fitting:c.left>=b.left&&c.right<=b.right,cRight:c.right,bRight:b.right,row:d.querySelector(".readout").getBoundingClientRect().toJSON(),readout:d.querySelector('.ro-label').textContent,number:d.querySelector('.ro-value').value}})()`);
-    assert.deepEqual(flow.active,[{sound:"osc",matrix:"filter",fx:"color"}[view]]);
-    assert.deepEqual(flow.branches,["dry","room","delay"]);
+    assert.deepEqual(flow.active,[{sound:"osc",matrix:"filter",fx:"dry"}[view]]);
+    assert.deepEqual(flow.branches,[]);
     console.log(width,view,JSON.stringify(flow));
     assert.ok(flow.fitting&&flow.readout&&flow.number);
     const shot=await cmd('Page.captureScreenshot',{format:'png'});await writeFile('/tmp/bong-next/flow-'+view+'-'+width+'.png',Buffer.from(shot.data,'base64'));

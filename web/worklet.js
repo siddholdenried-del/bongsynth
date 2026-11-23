@@ -20,11 +20,9 @@ class BongSynth extends AudioWorkletProcessor{
         case "step":x.gs_step_set(d.index,d.note,d.flags);break;
         case "transpose":x.gs_transpose(d.value);break;
         case "lfo":x.gs_lfo(...d.value);break;
-        case "color":x.gs_color(d.index,d.value);break;
         case "level":x.gs_level(d.value);break;
         case "pan":x.gs_pan(d.value);break;
-        case "send":x.gs_send(d.index,d.value);break;
-        case "fx":x.gs_fx(d.index,d.value);break;
+        case "volume":x.gs_volume(d.value);break;
       }
     };
   }

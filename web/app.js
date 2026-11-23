@@ -26,21 +26,20 @@ const PHRASES={
   "SLIDE RIDE":[[36,5],[39,5],[43,1],[36,0],[46,5],[43,5],[39,1],[36,0],[36,5],[41,5],[44,1],[36,0],[48,7],[46,5],[43,1],[39,0]],
   "STAB CHORDS":[[48,3],[48,0],[48,0],[48,1],[48,0],[48,0],[48,1],[48,0],[48,0],[48,0],[51,3],[51,0],[51,0],[46,1],[46,0],[46,0]],
 };
-const seed=()=>({preset:24,sound:[],mono:true,color:[0,0,0,0,0,0],level:100,pan:64,rev:20,dly:12,fx:[],bpm:124,transpose:0,
+const seed=()=>({preset:24,sound:[],mono:true,level:100,pan:64,volume:44,bpm:124,transpose:0,
   lfo:[0,40,0,0],steps:PHRASES["ACID LINE"].map(s=>[...s]),octave:4,pages:{sound:0,matrix:0,fx:0}});
 const int=(v,lo,hi)=>Number.isInteger(v)&&v>=lo&&v<=hi;
 function restore(){
   const s=seed();
   s.mono=!!x.gs_preset(s.preset);s.sound=[...Array(x.gs_param_count())].map((_,k)=>x.gs_get(k));
-  s.color=[...Array(6)].map((_,i)=>x.gs_color_get(i));s.fx=[...Array(x.gs_fx_count())].map((_,i)=>x.gs_fx_get(i));
   try{
     const k=JSON.parse(localStorage.getItem(KEY));if(!k)return s;
     if(int(k.preset,0,x.gs_presets()-1))s.preset=k.preset;
     if(Array.isArray(k.sound)&&k.sound.length===s.sound.length&&k.sound.every((v,i)=>int(v,x.gs_param_min(i),x.gs_param_max(i))))s.sound=k.sound;
     if(typeof k.mono==="boolean")s.mono=k.mono;
-    if(Array.isArray(k.color)&&k.color.length===6&&k.color.every((v,i)=>int(v,0,i===5?1:127)))s.color=k.color;
-    for(const f of ["level","pan","rev","dly"])if(int(k[f],0,127))s[f]=k[f];
-    if(Array.isArray(k.fx)&&k.fx.length===s.fx.length&&k.fx.every((v,i)=>int(v,0,x.gs_fx_max(i))))s.fx=k.fx;
+    for(const f of ["level","pan","volume"])if(int(k[f],0,127))s[f]=k[f];
+    // The former FX-bus volume was pot zero. Its other pots and sends no longer exist.
+    if(!int(k.volume,0,127)&&Array.isArray(k.fx)&&int(k.fx[0],0,127))s.volume=k.fx[0];
     if(typeof k.bpm==="number"&&k.bpm>=40&&k.bpm<=240)s.bpm=Math.round(k.bpm);
     if(int(k.transpose,-24,24))s.transpose=k.transpose;
     if(Array.isArray(k.lfo)&&k.lfo.length===4&&int(k.lfo[0],0,4)&&int(k.lfo[1],0,127)&&int(k.lfo[2],-64,63)&&int(k.lfo[3],0,9))s.lfo=k.lfo;
@@ -54,7 +53,7 @@ const persist=()=>{clearTimeout(timer);timer=setTimeout(()=>{try{localStorage.se
 
 // ---------- settings: what a knob reads, writes, shows, and which graph the plot draws for it ----------
 // kind: cycle (the patch's waveform at C3), response (the filter), adsr (that envelope), drive, glide, lfo2, lfo1,
-// envelope (a decay), tilt (a tone), echoes (delay feedback), steps (an option), level (anything else)
+// steps (an option), level (anything else)
 let cycleDirty=true,custom=false;
 const CYCLE=new Set([0,1,2,3,4,5,6,26,27,28,29,30,31,32,33,34,35,36,37]),RESPONSE=new Set([8,9,10,11,12]);
 const ENV_OF={};for(const e of [AMP,FENV,MENV])for(const id of e)ENV_OF[id]=e;
@@ -78,26 +77,15 @@ const MATRIX_PAGES=()=>[0,1,2,3,4,5].map(s=>{const src=SLOT0+3*s;return {name:"S
 const LFO_SHAPES=["SINE","TRI","SAW","SQUARE","S&H"],LFO_DEST=["CUTOFF","PITCH","LEVEL","PWM","RESO","DETUNE","MIX","DRIVE","NOISE","SUB"];
 const lfoHz=r=>.05*Math.pow(400,r/127);
 const hzText=h=>(h<1?h.toFixed(2):h.toFixed(1))+" HZ";
-function fxSpec(i,label,kind){
-  const max=x.gs_fx_max(i),opt=max<127;
-  return {fxId:i,label,min:0,max,def:x.gs_fx_def(i),kind:kind||(opt?"steps":"level"),fmt:v=>opt?str(x.gs_fx_option(i,v)):String(v),
-    get:()=>state.fx[i],set:v=>{state.fx[i]=v;send("fx",{index:i,value:v});persist();}};
-}
 const lfoSpec=(k,label,min,max,def,fmt,kind)=>({trackLfo:true,label,min,max,def,fmt,kind,get:()=>state.lfo[k],set:v=>{state.lfo[k]=v;send("lfo",{value:state.lfo});persist();}});
-const colorSpec=(k,label)=>({flow:"color",label,min:0,max:k===5?1:127,def:0,kind:k===5?"steps":"level",fmt:v=>k===5?(v?"ON":"OFF"):String(v),get:()=>state.color[k],
-  set:v=>{state.color[k]=v;send("color",{index:k,value:v});x.gs_color(k,v);cycleDirty=true;markCustom();persist();}});
 const mixSpec=(key,label,def,fmt,kind,write)=>({mixKey:key,label,min:0,max:127,def,fmt,kind,get:()=>state[key],set:v=>{state[key]=v;write(v);persist();}});
-const FX_PAGES=()=>[
+const MIX_PAGES=()=>[
   {name:"LFO 1",specs:[lfoSpec(0,"SHAPE",0,4,0,v=>LFO_SHAPES[v],"lfo1"),lfoSpec(1,"RATE",0,127,40,v=>hzText(lfoHz(v)),"lfo1"),
     lfoSpec(2,"DEPTH",-64,63,0,v=>(v>0?"+":"")+v,"lfo1"),lfoSpec(3,"DEST",0,9,0,v=>LFO_DEST[v],"steps")]},
-  {name:"COLOR",specs:[colorSpec(5,"COLOR"),colorSpec(0,"AMOUNT"),colorSpec(1,"WEAR"),colorSpec(2,"WOW")]},
-  {name:"GRIT",specs:[colorSpec(3,"DIGITAL"),colorSpec(4,"DROP")]},
-  {name:"MIX",specs:[mixSpec("rev","REVERB SEND",20,pct,"level",v=>send("send",{index:0,value:v})),mixSpec("dly","DELAY SEND",12,pct,"level",v=>send("send",{index:1,value:v})),
-    mixSpec("pan","PAN",64,v=>v===64?"C":(v<64?"L":"R")+Math.abs(v-64),"level",v=>send("pan",{value:v})),{...fxSpec(0,"VOLUME"),fmt:pct}]},
-  {name:"REVERB",specs:[fxSpec(4,"DECAY","envelope"),fxSpec(5,"TONE","tilt"),fxSpec(6,"LOW CUT","tilt"),fxSpec(7,"RETURN")]},
-  {name:"DELAY",specs:[fxSpec(8,"TIME"),fxSpec(9,"FEEDBACK","echoes"),fxSpec(10,"TONE","tilt"),fxSpec(11,"RETURN")]},
-  {name:"STEREO",specs:[fxSpec(15,"PING-PONG"),fxSpec(17,"WIDTH"),fxSpec(12,"LOW CUT","tilt")]},
-  {name:"TAPE",specs:[fxSpec(13,"TYPE"),fxSpec(14,"WEAR")]}];
+  {name:"MIX",specs:[
+    mixSpec("pan","PAN",64,v=>v===64?"C":(v<64?"L":"R")+Math.abs(v-64),"level",v=>send("pan",{value:v})),
+    mixSpec("volume","VOLUME",44,pct,"level",v=>send("volume",{value:v}))]}];
+
 
 // ---------- the desk (STYLE.md section 6): named pages, arrows beside the knobs, a readout over the plot ----------
 const desks={};
@@ -131,7 +119,7 @@ function buildDesk(d){
   fitDesk(d);focusSlot(d,Math.min(d.focus,d.specs.length-1));
 }
 function focusSlot(d,slot){d.focus=Math.max(0,slot);d.els.forEach((k,i)=>k.classList.toggle("on",i===d.focus));readout(d);}
-const FLOW_LABELS={osc:["OSC","O","Oscillators"],shape:["SHP","S","Voice shaper"],drive:["DRV","D","Drive"],filter:["FLT","F","Filter"],amp:["AMP","A","Amplitude"],color:["CLR","C","COLOR insert"],dry:["DRY","DR","Dry mix"],room:["RVB","R","ROOM reverb"],delay:["DLY","DL","Delay"],out:["OUT","OUT","Output"],mod:["MOD","M","Control setting, no direct audio stage"]};
+const FLOW_LABELS={osc:["OSC","O","Oscillators"],shape:["SHP","S","Voice shaper"],drive:["DRV","D","Drive"],filter:["FLT","F","Filter"],amp:["AMP","A","Amplitude"],dry:["DRY","DR","Dry mix"],out:["OUT","OUT","Output"],mod:["MOD","M","Control setting, no direct audio stage"]};
 function highlightFlow(d,s){
   const flow=d.root.querySelector(".signal-flow"),order=signalStages(state),key=order.join(" ");
   if(flow.dataset.order!==key){
@@ -140,10 +128,7 @@ function highlightFlow(d,s){
     const nodes=[];
     for(const id of order){
       if(nodes.length)nodes.push(sep("›"));
-      if(id==="parallel"){
-        const branch=make("span",null,{class:"signal-branches",title:"Dry, ROOM reverb and delay in parallel"});
-        branch.append(node("dry"),sep("+"),node("room"),sep("+"),node("delay"));nodes.push(branch);
-      }else nodes.push(node(id));
+      nodes.push(node(id));
     }
     nodes.push(node("mod"));
     const row=make("span",null,{class:"signal-chain","aria-hidden":"true"});
@@ -152,9 +137,9 @@ function highlightFlow(d,s){
   }
   const active=flowStages(s,state);
   for(const node of flow.querySelectorAll("[data-stage]"))node.classList.toggle("active",active.includes(node.dataset.stage));
-  flow.setAttribute("aria-label","Signal flow: "+order.map(id=>id==="parallel"?"dry, ROOM reverb and delay in parallel":FLOW_LABELS[id][2]).join(", then ")+". Current setting: "+active.map(id=>FLOW_LABELS[id][2]).join(", ")+".");
+  flow.setAttribute("aria-label","Signal flow: "+order.map(id=>FLOW_LABELS[id][2]).join(", then ")+". Current setting: "+active.map(id=>FLOW_LABELS[id][2]).join(", ")+".");
 }
-const SHORT_READOUT={"SOURCE":"SRC","AMOUNT":"AMT","REVERB SEND":"RV SND","DELAY SEND":"DL SND","FEEDBACK":"FDBK","RESONANCE":"RES","LOW CUT":"LO CUT","PING-PONG":"PING","DECAY":"DEC","RETURN":"RTN","SHAPE":"SHP","VOLUME":"VOL","WIDTH":"WID"};
+const SHORT_READOUT={"SOURCE":"SRC","AMOUNT":"AMT","RESONANCE":"RES","SHAPE":"SHP","VOLUME":"VOL"};
 function readout(d){
   const s=d.specs[d.focus];if(!s)return;
   highlightFlow(d,s);
@@ -228,15 +213,12 @@ function drawPlot(d,kindOverride){
     for(let x0=0;x0<w;x0++)ys.push(mid-lfoWave(shape,(now+(x0/(w-1)-.5)*span)*rate,7)*amp*.9*Math.max(.08,depth));
     plot(g,ys,C.acc,2);g.fillStyle=C.ink;g.fillRect(w>>1,top,1,bot-top);g.fillRect((w>>1)-2,Math.round(ys[w>>1])-2,5,5);return;
   }
-  if(kind==="echoes"){const fb=.85*f;let a=1;for(let k=0;k<12&&a>.02;k++,a*=Math.max(fb,.0001)){const X=Math.round(4+k*(w-8)/11);g.fillStyle=k?C.acc:C.ink;g.fillRect(X,Math.round(bot-(bot-top)*a),2,Math.round((bot-top)*a));}return;}
   for(let x0=0;x0<w;x0++){const t=x0/(w-1);let y;
-    if(kind==="envelope")y=Math.exp(-t/(.03+.9*f));
-    else if(kind==="drive"){const gg=1+9*f;y=Math.tanh(gg*(2*t-1))/Math.tanh(gg);}
+    if(kind==="drive"){const gg=1+9*f;y=Math.tanh(gg*(2*t-1))/Math.tanh(gg);}
     else if(kind==="glide")y=f<.01?(t<.5?-.6:.6):-.6+1.2*(t<.5?0:1-Math.exp(-(t-.5)/(.01+.4*f*f)));
-    else if(kind==="tilt")y=(1-2*t)*(1-2*f)*-1;
     else if(lo<0){const z=(0-lo)/(hi-lo);y=t>=Math.min(z,f)&&t<=Math.max(z,f)?1:-1;}
     else y=t<f?1:-1;
-    ys.push(kind==="envelope"?bot-y*(bot-top):mid-y*amp);}
+    ys.push(mid-y*amp);}
   plot(g,ys,C.acc,2);
 }
 function frame(){
@@ -261,7 +243,6 @@ function soundSheet(bank,from){
 }
 function loadPreset(i){
   state.preset=i;state.mono=!!x.gs_preset(i);state.sound=state.sound.map((_,k)=>x.gs_get(k));
-  for(let k=0;k<6;k++)state.color[k]=x.gs_color_get(k);
   send("preset",{value:i});send("mono",{value:state.mono});
   custom=false;cycleDirty=true;viewSound();rebuildDesks();persist();
 }
@@ -409,7 +390,7 @@ function setRec(v){recording=v;$("rec").setAttribute("aria-pressed",String(v));}
 
 // ---------- sound files ----------
 function exportSound(){
-  const lines=["BONGSYNTH SOUND 1","BASE "+state.preset+" "+str(x.gs_preset_name(state.preset)),"MODE "+(state.mono?"MONO":"POLY"),"COLOR "+state.color.join(" ")];
+  const lines=["BONGSYNTH SOUND 1","BASE "+state.preset+" "+str(x.gs_preset_name(state.preset)),"MODE "+(state.mono?"MONO":"POLY")];
   state.sound.forEach((v,k)=>lines.push("P "+k+" "+v+" # "+str(x.gs_param_name(k))));
   const a=make("a",null,{download:"bongsynth-"+str(x.gs_preset_name(state.preset)).toLowerCase().replace(/[^a-z0-9]+/g,"-")+".txt"});
   a.href=URL.createObjectURL(new Blob([lines.join("\n")+"\n"],{type:"text/plain"}));document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
@@ -419,17 +400,16 @@ async function importSound(file){
   try{
     if(file.size>20000)throw Error("That file is too large.");
     const t=(await file.text()).split(/\r?\n/);if(t[0]!=="BONGSYNTH SOUND 1")throw Error("Not a BongSynth sound file.");
-    let base=0,mono=true,color=null;const edits=[];
+    let base=0,mono=true,legacyColor=false;const edits=[];
     for(const l of t.slice(1)){const w=l.split("#")[0].trim().split(/\s+/);
       if(w[0]==="BASE"&&int(+w[1],0,x.gs_presets()-1))base=+w[1];
       else if(w[0]==="MODE")mono=w[1]!=="POLY";
-      else if(w[0]==="COLOR"){const c=w.slice(1).map(Number);if(c.length===6&&c.every((v,i)=>int(v,0,i===5?1:127)))color=c;}
+      else if(w[0]==="COLOR")legacyColor=true; // Legacy sound files retain the voice, not this obsolete insert.
       else if(w[0]==="P"){const k=+w[1],v=+w[2];if(int(k,0,x.gs_param_count()-1)&&int(v,x.gs_param_min(k),x.gs_param_max(k)))edits.push([k,v]);}}
     loadPreset(base);
     for(const [k,v] of edits)if(state.sound[k]!==v&&x.gs_set(k,v)){state.sound[k]=v;send("set",{id:k,value:v});custom=true;}
-    if(color)color.forEach((v,i)=>{if(state.color[i]!==v)custom=true;state.color[i]=v;send("color",{index:i,value:v});x.gs_color(i,v);});
     if(state.mono!==mono){state.mono=mono;send("mono",{value:mono});x.gs_mono(mono?1:0);custom=true;}
-    cycleDirty=true;viewSound();rebuildDesks();persist();note.textContent="Loaded "+file.name+".";
+    cycleDirty=true;viewSound();rebuildDesks();persist();note.textContent="Loaded "+file.name+"."+(legacyColor?" Legacy COLOR settings were ignored.":"");
   }catch(e){note.textContent=e.message;}
 }
 
@@ -438,12 +418,11 @@ try{
   const response=await fetch(new URL("bongsynth.wasm",import.meta.url));
   if(!response.ok)throw Error("Synth engine missing");
   module=await WebAssembly.compile(await response.arrayBuffer());x=boot(module);state=restore();apply(x,state);
-  x.gs_send(0,0);x.gs_send(1,0);   // the page's own copy draws the oscillator scope: no reverb or delay in it
-  {const probe=boot(module);const m=probe.gs_preset(state.preset);custom=state.sound.some((v,k)=>probe.gs_get(k)!==v)||state.color.some((v,i)=>probe.gs_color_get(i)!==v)||!!m!==state.mono;}
+  {const probe=boot(module);const m=probe.gs_preset(state.preset);custom=state.sound.some((v,k)=>probe.gs_get(k)!==v)||!!m!==state.mono;}
   wireSheet();
   makeDesk("sound",SOUND_PAGES,()=>soundName(state.preset)+(custom?" *":""));
   makeDesk("matrix",MATRIX_PAGES,()=>{const s=state.pages.matrix,src=SLOT0+3*s;return str(x.gs_param_text(src,state.sound[src]))+" → "+str(x.gs_param_text(src+1,state.sound[src+1]));});
-  makeDesk("fx",FX_PAGES,()=>"");
+  makeDesk("fx",MIX_PAGES,()=>"");
   viewSound();rebuildDesks();buildSteps();buildPiano();requestAnimationFrame(frame);
   $("bank-pick").onclick=()=>openSheet("BANK",BANKS.map(([a,b,n],i)=>({value:i,label:n,sub:(b-a)+" SOUNDS"})),bankOf(state.preset),v=>soundSheet(+v,$("bank-pick")),3,$("bank-pick"));
   $("preset-p").onclick=()=>soundSheet(bankOf(state.preset),$("preset-p"));

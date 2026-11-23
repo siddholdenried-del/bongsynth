@@ -5,8 +5,8 @@ BongCult. The DSP in `dsp/` is copied unchanged from GhettoMachine `app/dsp` (th
 and compiled to WebAssembly with a small bridge (`bridge.c`) that plays one instrument track.
 
 Signal path, in blocks of 32 samples at 44.1 kHz, as on the FM-1:
-keys / sequencer → `syn_note_on_f` → `syn_prepare`, `syn_half(0)`, `syn_half(1)` → COLOR insert → `syn_mix`
-(level, pan, reverb and delay sends) → `fxbus` (ROOM reverb, tempo delay) → output.
+keys or sequencer → oscillators → voice shaper, drive and filter (voice shaper PRE/POST) → amplitude → dry stereo
+level/pan → master volume. The browser engine has no Color insert, reverb, or delay returns.
 
 ## Play
 
@@ -19,10 +19,10 @@ then open http://127.0.0.1:4190. Serve it over HTTPS away from localhost; `file:
 - **MATRIX:** the six mod-matrix slots (source, destination, amount).
 - **SEQUENCE:** 16 steps with note, accent and slide (slides hold into the next note and glide, as a 303), five
   phrases, a generator and transpose.
-- **EFFECTS:** LFO 1 (the track's), COLOR, sends and volume, the ROOM reverb and the delay.
+- **MIX:** track LFO 1, dry pan and master volume.
 - **Keys:** the on-screen keyboard, or `A`–`K` / `W E T Y U` on a computer keyboard, `Z` / `X` for octaves, Shift for
   louder, Space to play / stop, Esc to silence.
-- State saves in the browser only. Sounds can be shared as `.txt` from the ☰ menu.
+- State saves in the browser only. Sounds can be shared as `.txt` from the ☰ menu. Older files keep their voice parameters but ignore their obsolete `COLOR` setting.
 
 ## Build
 
@@ -32,5 +32,5 @@ Needs Emscripten 4.0.11 (or `EMCC`) and Python 3: `./build.sh` writes `gen/fe_ta
 ## Licence
 
 GPL-3.0-only (see `LICENSE`). The voice is Felucca-Engines' ANALOG by Leo Kuroshita, Hügelton Instruments (MIT,
-`dsp/felucca/LICENSE-MIT`); the reverb and delay are from X0X by Charles Vestal (GPL-3.0), after 9W9. Toolchain licences
+`dsp/felucca/LICENSE-MIT`); the vendored upstream tree also retains the unlinked X0X effects sources by Charles Vestal (GPL-3.0), after 9W9. Toolchain licences
 for the WASM runtime are in `web/licenses/`.

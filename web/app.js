@@ -1,3 +1,4 @@
+import {deskPosition} from "./desk-status.mjs";
 import {boot,apply} from "./engine.js";
 import {$,make,knob,openSheet,wireSheet,stepper} from "./controls.js";
 import {css,unit,pixelCanvas,plot,screen,liveTrace,Trace} from "./viz.js";
@@ -103,13 +104,24 @@ function makeDesk(name,pagesFn,modeFn){
   const root=document.querySelector(`[data-desk="${name}"]`);
   const d={name,root,canvas:root.querySelector(".plot-trace canvas"),box:root.querySelector(".desk-knobs"),tag:root.querySelector(".page-tag"),
     label:root.querySelector(".ro-label"),value:root.querySelector(".ro-value"),mode:root.querySelector(".ro-mode"),focus:0,specs:[],els:[],pagesFn,modeFn};
-  root.querySelectorAll(".page-arrow").forEach(b=>b.onclick=()=>turnPage(d,+b.dataset.dir));
+  d.arrows=[...root.querySelectorAll(".page-arrow")];
+  d.arrows.forEach(b=>b.onclick=()=>turnPage(d,+b.dataset.dir));
   new ResizeObserver(()=>fitDesk(d)).observe(d.box);
   desks[name]=d;return d;
 }
 function buildDesk(d){
-  const pages=d.pagesFn(),n=pages.length,pg=((state.pages[d.name]||0)%n+n)%n;state.pages[d.name]=pg;
-  d.tag.value=pages[pg].name;d.specs=pages[pg].specs;d.box.replaceChildren();d.els=[];
+  const pages=d.pagesFn(),{index:pg,count,name,previous,next}=deskPosition(pages,state.pages[d.name]||0);
+  state.pages[d.name]=pg;
+  d.tag.value=name;
+  d.tag.setAttribute("aria-label",`Page ${pg+1} of ${count}: ${name}`);
+  for(const b of d.arrows){
+    const back=+b.dataset.dir<0,neighbor=back?previous:next;
+    b.title=`${back?"Previous":"Next"} page: ${neighbor}`;
+    b.setAttribute("aria-label",b.title);
+  }
+  d.root.querySelector('[data-context="-1"]').textContent="‹ "+previous;
+  d.root.querySelector('[data-context="1"]').textContent=next+" ›";
+  d.specs=pages[pg].specs;d.box.replaceChildren();d.els=[];
   d.specs.forEach((s,slot)=>{
     const kn=knob({id:d.name+"-k"+slot,label:s.label,min:s.min,max:s.max,value:s.get(),def:s.def,fmt:s.fmt,onInput:v=>{s.set(v);focusSlot(d,slot);}});
     kn.addEventListener("focusin",()=>focusSlot(d,slot));kn.addEventListener("pointerdown",()=>focusSlot(d,slot));
@@ -308,7 +320,40 @@ function octave(dn){const o=Math.max(1,Math.min(7,state.octave+dn));if(o===state
 
 // ---------- audio ----------
 let lastAmp=0;
+let bench=null;
+function benchReadout(text,detail){
+  const out=$("dsp-load");
+  out.querySelector("b").textContent=text;
+  out.setAttribute("aria-label","Browser DSP benchmark: "+text);
+  out.title=detail;
+  $("dsp-detail").textContent=detail;
+}
+function benchStop(text,detail){
+  if(bench){clearTimeout(bench.timeout);bench.worker.terminate();bench=null;}
+  $("dsp-run").disabled=false;
+  benchReadout(text,detail);
+}
+function runBench(){
+  if(bench)return;
+  if(playing||held.size){benchReadout("—","Stop playback and release all notes before running.");return;}
+  try{
+    const worker=new Worker(new URL("./dsp-bench.mjs",import.meta.url),{type:"module"});
+    const failed=()=>{if(bench?.worker===worker)benchStop("N/A","The browser could not complete the CPU benchmark.");};
+    bench={worker,timeout:setTimeout(failed,25000)};
+    $("dsp-run").disabled=true;
+    benchReadout("…","Rendering the current sequence silently.");
+    worker.onmessage=({data})=>{
+      if(bench?.worker!==worker)return;
+      if(!Number.isFinite(data.load)){failed();return;}
+      const load=data.load<1?"<1%":Math.round(data.load)+"%";
+      benchStop(load,"Last run: "+load+" of real-time duration for the sequence and sound at the time of the test. Not a live callback or FM‑1 reading.");
+    };
+    worker.onerror=failed;
+    worker.postMessage({module,state});
+  }catch{benchStop("N/A","The browser could not start the CPU benchmark.");}
+}
 async function enableAudio(){
+  if(bench)benchStop("—","Benchmark cancelled to prioritize audio playback.");
   if(ctx?.state==="running"&&port)return true;
   if(connecting)return connecting;
   connecting=(async()=>{
@@ -322,7 +367,7 @@ async function enableAudio(){
           markStep(data.step);trace.push(data.trace);
           for(let i=0;i<data.trace.length;i+=4){const a=data.trace[i];if(lastAmp<=1e-4&&a>1e-4&&!held.size)flashHit(false);lastAmp=a;}
         };
-        node.addEventListener("processorerror",()=>{info.textContent="Audio processor stopped. Reload to retry.";setPlaying(false);});
+        node.addEventListener("processorerror",()=>{setPlaying(false);info.textContent="Audio processor stopped. Reload to retry.";});
         send("state",{state});}
       await ctx.resume();if(ctx.state!=="running")throw Error("Audio is still suspended.");
       info.textContent=playing?"Playing":"Audio ready";return true;
@@ -395,6 +440,7 @@ try{
   let saved="sound";try{saved=sessionStorage.getItem(KEY+"-view")||"sound";}catch{}view(saved);$("screen").classList.remove("fringe");
   const setFx=off=>{document.body.classList.toggle("fx-off",off);$("fx-off").checked=off;try{localStorage.setItem(KEY+"-fx",off?"off":"on");}catch{}};
   $("fx-off").onchange=()=>setFx($("fx-off").checked);try{setFx(localStorage.getItem(KEY+"-fx")==="off");}catch{}
+  $("dsp-run").onclick=runBench;
   $("sound-export").onclick=exportSound;$("sound-file").onchange=()=>{const f=$("sound-file").files[0];if(f)importSound(f);$("sound-file").value="";};
   let narrow=window.innerWidth<641;addEventListener("resize",()=>{const n=window.innerWidth<641;if(n!==narrow){narrow=n;allOff();buildPiano();}});
   addEventListener("blur",allOff);

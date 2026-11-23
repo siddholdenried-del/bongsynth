@@ -45,6 +45,7 @@
   <details class="menu" id="menu"><summary aria-label="Menu">☰</summary>
     <div class="menu-body">
       <label class="fx-toggle"><input type="checkbox" id="fx-off"> FX OFF <small>(NO VHS TEXTURE)</small></label>
+      <section><h2>DSP BENCH</h2><p>Renders the current sequence, sound and effects silently in a separate browser worker. The estimate compares render time with audio duration. It is not a live audio meter or an FM‑1 reading.</p><button id="dsp-run" class="chunk" type="button">RUN DSP BENCH</button><p id="dsp-detail" role="status">Stop playback before running.</p></section>
       <section><h2>KEYS</h2><div class="keymap"><span><kbd>A</kbd>–<kbd>K</kbd> WHITE KEYS</span><span><kbd>W</kbd><kbd>E</kbd><kbd>T</kbd><kbd>Y</kbd><kbd>U</kbd> BLACK</span><span><kbd>Z</kbd><kbd>X</kbd> OCTAVE</span><span><kbd>ESC</kbd> SILENCE</span></div><p>SHIFT = LOUDER · SPACE = PLAY/STOP · ENTER = REC. DRAG KNOBS UP/DOWN (SHIFT = FINE), DOUBLE-CLICK TO RESET. DRAG A STEP'S NOTE UP/DOWN.</p></section>
       <section><h2>SHARE SOUND</h2><div class="file-actions"><button type="button" class="chunk" id="sound-export">DOWNLOAD</button><label class="file-pick">CHOOSE OR DROP<input type="file" id="sound-file" accept=".txt,text/plain"></label></div><p id="sound-notice" class="file-notice" role="status"></p></section>
       <section class="links"><a href="https://ghettomachine.bongcult.com/bongsynth/">ARCHITECTURE</a><a href="https://github.com/siddholdenried-del/bongsynth/archive/refs/tags/v0.2.0.zip">SOURCE CODE (GPLV3)</a><a href="https://bongcult.com/">BONGCULT</a><a href="https://tools.bongcult.com/">AUDIO TOOLS</a></section>
@@ -64,7 +65,7 @@
         <button id="audition" class="chunk blue" type="button" aria-label="Audition: play C3 while held">▶ AUDITION</button>
       </div>
       <div class="plot"><div class="readout"><output class="page-tag" aria-live="polite"></output><span class="ro-label"></span><output class="ro-value" aria-live="polite"></output><span class="readout-gap"></span><span class="ro-mode"></span><span class="lcd-hit" aria-hidden="true"></span></div>
-        <div class="plot-trace"><canvas aria-hidden="true"></canvas></div></div>
+        <div class="plot-trace"><canvas aria-hidden="true"></canvas><div class="page-context" aria-hidden="true"><span data-context="-1"></span><span data-context="1"></span></div></div></div>
       <div class="desk-row" role="group" aria-label="Page"><button type="button" class="page-arrow" data-dir="-1" aria-label="Previous page">◀</button><div class="desk-knobs" aria-label="Knobs"></div><button type="button" class="page-arrow" data-dir="1" aria-label="Next page">▶</button></div>
     </div>
   </section>
@@ -90,7 +91,7 @@
   <section class="view" data-view="matrix" role="tabpanel" aria-label="Mod matrix">
     <div class="desk" data-desk="matrix">
       <div class="plot"><div class="readout"><output class="page-tag" aria-live="polite"></output><span class="ro-label"></span><output class="ro-value" aria-live="polite"></output><span class="readout-gap"></span><span class="ro-mode"></span><span class="lcd-hit" aria-hidden="true"></span></div>
-        <div class="plot-trace"><canvas aria-hidden="true"></canvas></div></div>
+        <div class="plot-trace"><canvas aria-hidden="true"></canvas><div class="page-context" aria-hidden="true"><span data-context="-1"></span><span data-context="1"></span></div></div></div>
       <div class="desk-row" role="group" aria-label="Slot"><button type="button" class="page-arrow" data-dir="-1" aria-label="Previous slot">◀</button><div class="desk-knobs" aria-label="Knobs"></div><button type="button" class="page-arrow" data-dir="1" aria-label="Next slot">▶</button></div>
     </div>
   </section>
@@ -98,12 +99,12 @@
   <section class="view" data-view="fx" role="tabpanel" aria-label="Effects">
     <div class="desk" data-desk="fx">
       <div class="plot"><div class="readout"><output class="page-tag" aria-live="polite"></output><span class="ro-label"></span><output class="ro-value" aria-live="polite"></output><span class="readout-gap"></span><span class="ro-mode"></span><span class="lcd-hit" aria-hidden="true"></span></div>
-        <div class="plot-trace"><canvas aria-hidden="true"></canvas></div></div>
+        <div class="plot-trace"><canvas aria-hidden="true"></canvas><div class="page-context" aria-hidden="true"><span data-context="-1"></span><span data-context="1"></span></div></div></div>
       <div class="desk-row" role="group" aria-label="Page"><button type="button" class="page-arrow" data-dir="-1" aria-label="Previous page">◀</button><div class="desk-knobs" aria-label="Knobs"></div><button type="button" class="page-arrow" data-dir="1" aria-label="Next page">▶</button></div>
     </div>
   </section>
 </main>
-<footer class="brand-foot"><img class="bongsoft-mark" src="art/bongsoft-logo-cutout.webp" width="640" height="150" alt="BongSoft"></footer>
+<footer class="brand-foot"><div id="dsp-load" class="dsp-load" aria-label="Browser DSP benchmark not run"><span>BENCH</span> <b>—</b></div><img class="bongsoft-mark" src="art/bongsoft-logo-cutout.webp" width="640" height="150" alt="BongSoft"></footer>
 </div>
 <div class="sheet" id="sheet" hidden><div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div class="sheet-head"><span id="sheet-title"></span><button type="button" class="chunk" id="sheet-close" aria-label="Close">✕</button></div><div class="sheet-grid" id="sheet-grid"></div></div></div>
 <script type="module" src="app.js"></script></body></html>

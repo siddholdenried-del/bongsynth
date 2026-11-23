@@ -92,3 +92,11 @@ body[data-view=matrix] .view[data-view=matrix],body[data-view=fx] .view[data-vie
   .steps .rlab{grid-row:1;grid-column:var(--pc);text-align:center;align-self:end}
   .steps .cell{grid-column:var(--pc);grid-row:var(--sr);font-size:var(--t-s)}
 }
+
+/* Page landmarks are painted inside the existing plot, not a new layout row. */
+[data-desk] .page-tag{letter-spacing:.04em}
+.page-context{position:absolute;z-index:1;inset:calc(var(--u)*3) calc(var(--u)*5) auto;display:flex;justify-content:space-between;gap:1ch;pointer-events:none;color:var(--screen-dim);font-size:var(--t-s);line-height:1.15}
+.page-context span{padding:0 .4ch;white-space:nowrap;background:var(--screen)}
+.brand-foot{position:relative}
+.dsp-load{position:absolute;inset-inline-start:0;inset-block-end:0;display:flex;gap:.55ch;align-items:center;padding:0 .45ch;min-width:6ch;color:var(--dim);font-size:var(--t-s);font-variant-numeric:tabular-nums;white-space:nowrap}
+.dsp-load b{color:var(--cream)}

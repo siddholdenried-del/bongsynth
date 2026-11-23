@@ -26,3 +26,15 @@ export function flowStages(spec,{sound,lfo}){
   if(i===15||i===16)return ['mod'];   // note allocation and legato are voice controls, not a serial audio block
   return ['amp'];
 }
+
+// Stable editing order; the scope above can still reflect pre/post-filter shaper routing.
+const legacySoundPages=['OSC','TONE','FILTER','AMP ENV','FILTER ENV','VOICE','TOUCH','OSC 2','SHAPER','MOD ENV','LFO 2','MACRO'];
+export const soundPageOrder=['OSC','OSC 2','TONE','SHAPER','FILTER','FILTER ENV','AMP ENV','TOUCH','VOICE','MOD ENV','LFO 2','MACRO'];
+export const soundPageIndex=(legacyIndex,savedName)=>Math.max(0,soundPageOrder.indexOf(savedName||legacySoundPages[legacyIndex]));
+const destinations={
+  osc:['sound','OSC'], shape:['sound','SHAPER'], drive:['sound','TONE',3], filter:['sound','FILTER'],
+  amp:['sound','AMP ENV'], dry:['fx','MIX',0], out:['fx','MIX',1], mod:['sound','MOD ENV']
+};
+export const scopeDestination=id=>destinations[id];
+const soundGroups=['osc','osc','drive','shape','filter','filter','amp','amp','mod','mod','mod','mod'];
+export const soundPageStage=name=>soundGroups[soundPageOrder.indexOf(name)];

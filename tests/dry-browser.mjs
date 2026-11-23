@@ -36,7 +36,7 @@ try{
   const saved=await poll(`(()=>{const s=JSON.parse(localStorage.getItem('bongsynth-v2'));return s.sound?.[31]===107?s:null})()`);
   assert.equal(saved.preset,24);assert.equal(saved.mono,false);assert.equal(saved.volume,70);
   for(const old of ['fx','rev','dly','color'])assert.equal(old in saved,false);
-  await js(`(()=>{document.querySelector('[data-tab=sound]').click();const next=document.querySelector('[data-desk=sound] [data-dir="1"]');for(let i=0;i<8;i++)next.click()})()`);
+  await js(`(()=>{document.querySelector('[data-tab=sound]').click();document.querySelector('[data-desk=sound] button[data-stage="shape"]').click()})()`);
   const routing=await js(`(()=>{const d=document.querySelector('[data-desk=sound]');const flow=d.querySelector('.signal-flow');const c=flow.querySelector('.signal-chain').getBoundingClientRect();const p=d.querySelector('.plot').getBoundingClientRect();return {name:d.querySelector('.page-tag').value,chain:flow.dataset.order,active:flow.querySelector('.active').dataset.stage,fit:c.left>=p.left&&c.right<=p.right,overflow:document.documentElement.scrollWidth>innerWidth};})()`);
   assert.deepEqual(routing,{name:'SHAPER',chain:'osc drive filter shape amp dry out',active:'shape',fit:true,overflow:false});
   await js("document.querySelector('#menu').open=true;document.querySelector('#dsp-run').click()",true);

@@ -130,3 +130,15 @@ body[data-view=matrix] .view[data-view=matrix],body[data-view=fx] .view[data-vie
   .readout:has(.signal-flow) .ro-label{font-size:0}
   .readout:has(.signal-flow) .ro-label::after{content:attr(data-short);font-size:10px}
 }
+
+/* Turn the Sound readout's signal stages into compact jump controls. */
+.signal-chain button[data-stage]{
+  appearance:none;border:0;border-radius:2px;background:none;color:inherit;
+  font:inherit;line-height:1;min-height:26px;padding:0 .25ch;cursor:pointer;touch-action:manipulation;
+}
+.signal-chain button[data-stage]:focus-visible{outline:1px solid var(--screen-accent);outline-offset:1px}
+.signal-chain button[data-stage]:hover,.signal-chain button[data-stage][aria-current=true]{background:color-mix(in srgb,var(--screen-accent) 17%,transparent);color:var(--screen-accent)}
+.signal-chain button[data-stage=mod][aria-current=true]{display:inline-block}
+@media(max-width:640px){
+  .signal-chain button[data-stage]{font-size:0;min-width:16px;padding-inline:2px}
+}

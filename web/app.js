@@ -1,10 +1,11 @@
-import {signalStages,flowStages} from "./signal-flow.mjs";
+import {signalStages,flowStages,soundPageOrder,soundPageIndex,scopeDestination,soundPageStage} from "./signal-flow.mjs";
 import {deskPosition} from "./desk-status.mjs";
 import {boot,apply} from "./engine.js";
 import {$,make,knob,openSheet,wireSheet,stepper} from "./controls.js";
 import {css,unit,pixelCanvas,plot,screen,liveTrace,Trace} from "./viz.js";
 const info=$("status");
 let x,module,ctx,node,port,connecting,playing=false,recording=false,state,timer=0,analyser,scopeBuf=new Float32Array(2048);
+let selectView;
 const send=(kind,value={})=>port?.postMessage({kind,...value});
 
 // ---------- the engine's names ----------
@@ -45,7 +46,8 @@ function restore(){
     if(Array.isArray(k.lfo)&&k.lfo.length===4&&int(k.lfo[0],0,4)&&int(k.lfo[1],0,127)&&int(k.lfo[2],-64,63)&&int(k.lfo[3],0,9))s.lfo=k.lfo;
     if(Array.isArray(k.steps)&&k.steps.length===16&&k.steps.every(st=>Array.isArray(st)&&int(st[0],0,127)&&int(st[1],0,7)))s.steps=k.steps;
     if(int(k.octave,1,7))s.octave=k.octave;
-    if(k.pages&&typeof k.pages==="object")for(const d of ["sound","matrix","fx"])if(int(k.pages[d],0,40))s.pages[d]=k.pages[d];
+    if(k.pages&&typeof k.pages==="object")for(const d of ["matrix","fx"])if(int(k.pages[d],0,40))s.pages[d]=k.pages[d];
+    s.pages.sound=soundPageIndex(k.pages?.sound,k.soundPageName);
   }catch{}
   return s;
 }
@@ -69,9 +71,10 @@ const pct=v=>Math.round(v/1.27)+"%";
 const levelSpec=()=>({flow:"amp",label:"LEVEL",min:0,max:127,def:100,kind:"level",fmt:pct,get:()=>state.level,set:v=>{state.level=v;send("level",{value:v});persist();}});
 const page=(name,ids)=>({name,specs:ids.map(id=>id==="M"?modeSpec():id==="L"?levelSpec():soundSpec(id))});
 // The firmware's EDIT and ENV pages, named, four knobs each, as the FM-1's four encoders.
-const SOUND_PAGES=()=>[page("OSC",[0,1,2,3]),page("TONE",[4,5,6,7]),page("FILTER",[8,9,10,11]),page("AMP ENV",AMP),page("FILTER ENV",FENV),
-  page("VOICE",["M",16,17,15]),page("TOUCH",[12,13,14,"L"]),page("OSC 2",[26,27,28,29]),page("SHAPER",[30,31,32,33]),
-  page("MOD ENV",MENV),page("LFO 2",[42,43,44,45]),page("MACRO",[34,35,36,37])];
+const SOUND_KNOBS={OSC:[0,1,2,3],"OSC 2":[26,27,28,29],TONE:[4,5,6,7],SHAPER:[30,31,32,33],
+  FILTER:[8,9,10,11],"FILTER ENV":FENV,"AMP ENV":AMP,TOUCH:[12,13,14,"L"],VOICE:["M",16,17,15],
+  "MOD ENV":MENV,"LFO 2":[42,43,44,45],MACRO:[34,35,36,37]};
+const SOUND_PAGES=()=>soundPageOrder.map(name=>page(name,SOUND_KNOBS[name]));
 const MATRIX_PAGES=()=>[0,1,2,3,4,5].map(s=>{const src=SLOT0+3*s;return {name:"SLOT "+(s+1),specs:[
   {...soundSpec(src),label:"SOURCE",kind:"steps"},{...soundSpec(src+1),label:"DEST",kind:"steps"},{...soundSpec(src+2),label:"AMOUNT",kind:"level"}]};});
 const LFO_SHAPES=["SINE","TRI","SAW","SQUARE","S&H"],LFO_DEST=["CUTOFF","PITCH","LEVEL","PWM","RESO","DETUNE","MIX","DRIVE","NOISE","SUB"];
@@ -101,6 +104,7 @@ function makeDesk(name,pagesFn,modeFn){
 function buildDesk(d){
   const pages=d.pagesFn(),{index:pg,count,name,previous,next}=deskPosition(pages,state.pages[d.name]||0);
   state.pages[d.name]=pg;
+  if(d.name==="sound")state.soundPageName=name;
   d.tag.value=name;
   d.tag.setAttribute("aria-label",`Page ${pg+1} of ${count}: ${name}`);
   for(const b of d.arrows){
@@ -122,22 +126,38 @@ function focusSlot(d,slot){d.focus=Math.max(0,slot);d.els.forEach((k,i)=>k.class
 const FLOW_LABELS={osc:["OSC","O","Oscillators"],shape:["SHP","S","Voice shaper"],drive:["DRV","D","Drive"],filter:["FLT","F","Filter"],amp:["AMP","A","Amplitude"],dry:["DRY","DR","Dry mix"],out:["OUT","OUT","Output"],mod:["MOD","M","Control setting, no direct audio stage"]};
 function highlightFlow(d,s){
   const flow=d.root.querySelector(".signal-flow"),order=signalStages(state),key=order.join(" ");
+  const interactive=d.name==="sound";
   if(flow.dataset.order!==key){
-    const node=id=>make("span",FLOW_LABELS[id][0],{"data-stage":id,"data-small":FLOW_LABELS[id][1],title:FLOW_LABELS[id][2]});
-    const sep=text=>make("span",text,{class:"signal-sep"});
+    const oldFocus=flow.contains(document.activeElement)&&document.activeElement.dataset.stage;
+    const node=id=>{
+      const [label,small,title]=FLOW_LABELS[id],attrs={"data-stage":id,"data-small":small,title};
+      if(!interactive)return make("span",label,attrs);
+      const [,pageName]=scopeDestination(id);
+      const jump=make("button",label,{...attrs,type:"button","aria-label":title+": go to "+pageName});
+      jump.onclick=()=>jumpToStage(id);return jump;
+    };
     const nodes=[];
     for(const id of order){
-      if(nodes.length)nodes.push(sep("›"));
+      if(nodes.length)nodes.push(make("span","›",{class:"signal-sep","aria-hidden":"true"}));
       nodes.push(node(id));
     }
     nodes.push(node("mod"));
-    const row=make("span",null,{class:"signal-chain","aria-hidden":"true"});
+    const row=make("span",null,{class:"signal-chain",...(!interactive?{"aria-hidden":"true"}:{})});
     row.append(...nodes);flow.replaceChildren(row);
-    flow.setAttribute("role","img");flow.dataset.order=key;
+    flow.setAttribute("role",interactive?"group":"img");flow.dataset.order=key;
+    if(oldFocus)flow.querySelector('[data-stage="'+oldFocus+'"]')?.focus({preventScroll:true});
   }
   const active=flowStages(s,state);
-  for(const node of flow.querySelectorAll("[data-stage]"))node.classList.toggle("active",active.includes(node.dataset.stage));
+  const current=interactive?soundPageStage(d.tag.value):null;
+  for(const node of flow.querySelectorAll("[data-stage]")){
+    node.classList.toggle("active",active.includes(node.dataset.stage));
+    if(interactive){
+      if(node.dataset.stage===current)node.setAttribute("aria-current","true");
+      else node.removeAttribute("aria-current");
+    }
+  }
   flow.setAttribute("aria-label","Signal flow: "+order.map(id=>FLOW_LABELS[id][2]).join(", then ")+". Current setting: "+active.map(id=>FLOW_LABELS[id][2]).join(", ")+".");
+
 }
 const SHORT_READOUT={"SOURCE":"SRC","AMOUNT":"AMT","RESONANCE":"RES","SHAPE":"SHP","VOLUME":"VOL"};
 function readout(d){
@@ -147,7 +167,15 @@ function readout(d){
   d.label.textContent=label;d.label.dataset.short=SHORT_READOUT[label]||label;
   d.label.title=label;d.value.value=s.fmt(s.get()).toUpperCase();if(d.mode)d.mode.textContent=d.modeFn?.()||"";
 }
-function turnPage(d,dir){const n=d.pagesFn().length;state.pages[d.name]=((state.pages[d.name]||0)+dir+n)%n;d.focus=0;buildDesk(d);persist();}
+function showDeskPage(d,index,slot=0){state.pages[d.name]=index;d.focus=slot;buildDesk(d);persist();}
+function turnPage(d,dir){const n=d.pagesFn().length;showDeskPage(d,((state.pages[d.name]||0)+dir+n)%n);}
+function jumpToStage(id){
+  const [view,pageName,slot]=scopeDestination(id), d=desks[view];
+  const index=d.pagesFn().findIndex(p=>p.name===pageName);
+  if(index<0)return;
+  if(document.body.dataset.view!==view){selectView(view);showDeskPage(d,index,slot);d.els[d.focus]?.input.focus({preventScroll:true});}
+  else showDeskPage(d,index,slot);
+}
 // BongDrums' fit: the dial from the room in the row and the narrowest knob.
 function fitDesk(d){
   const box=d.box,h=box.clientHeight;if(!h)return;
@@ -443,6 +471,7 @@ try{
     if(desks[t])fitDesk(desks[t]);
     if(changed){const s=$("screen");s.classList.remove("fringe");void s.offsetWidth;s.classList.add("fringe");}
   };
+  selectView=view;
   tabs.forEach(b=>b.onclick=()=>view(b.dataset.tab));
   let saved="sound";try{saved=sessionStorage.getItem(KEY+"-view")||"sound";}catch{}view(saved);$("screen").classList.remove("fringe");
   const setFx=off=>{document.body.classList.toggle("fx-off",off);$("fx-off").checked=off;try{localStorage.setItem(KEY+"-fx",off?"off":"on");}catch{}};
@@ -455,6 +484,10 @@ try{
     if(e.metaKey||e.altKey||e.ctrlKey||!$("sheet").hidden)return;
     if(e.key==="Escape"){allOff();return;}
     if(e.target.closest("input,select,textarea,[contenteditable],[role=slider]"))return;
+    if(document.body.dataset.view==="sound"&&(e.key==="ArrowLeft"||e.key==="ArrowRight")
+      && !e.shiftKey && (!e.target.closest("button,summary,a")||e.target.closest("[data-desk=sound] .page-arrow,[data-desk=sound] .signal-flow"))){
+      e.preventDefault();turnPage(desks.sound,e.key==="ArrowRight"?1:-1);return;
+    }
     const k=e.key.toLowerCase();
     if(e.code==="Space"&&!e.target.closest("button,summary,a")){e.preventDefault();if(!e.repeat)toggle();return;}
     if(e.key==="Enter"&&!e.target.closest("button,summary,a")){e.preventDefault();setRec(!recording);return;}

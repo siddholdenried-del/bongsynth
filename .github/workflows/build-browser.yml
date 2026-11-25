@@ -1,0 +1,42 @@
+name: Build and test browser engine
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Build with pinned Emscripten
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init emsdk
+          git -C emsdk fetch --depth=1 https://github.com/emscripten-core/emsdk.git 708dcbcc9ee23bc7d2dad44fc90db377e38b771c
+          git -C emsdk checkout --detach FETCH_HEAD
+          emsdk/emsdk install 7.0.0
+          emsdk/emsdk activate 7.0.0
+          source emsdk/emsdk_env.sh
+          bash build.sh
+      - name: Verify audio and saved format
+        run: node --test tests/*.test.mjs
+      - name: Package exact source and browser files
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p browser-release
+          cp -R web/. browser-release/
+          cp firmware-engine.json browser-release/
+          git archive --format=zip -o browser-release/source.zip HEAD
+          python3 -c 'from pathlib import Path; p=Path("browser-release/index.html"); import re; p.write_text(re.sub(r"https://github.com/siddholdenried-del/[^/]+/archive/refs/tags/[^\"]+\.zip","source.zip",p.read_text()))'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: github.ref == 'refs/heads/main'
+        with:
+          name: bongsynth-browser-${{ github.sha }}
+          path: browser-release/
+          if-no-files-found: error

@@ -34,3 +34,6 @@ Needs Emscripten 4.0.11 (or `EMCC`) and Python 3: `./build.sh` writes `gen/fe_ta
 GPL-3.0-only (see `LICENSE`). The voice is Felucca-Engines' ANALOG by Leo Kuroshita, Hügelton Instruments (MIT,
 `dsp/felucca/LICENSE-MIT`); the vendored upstream tree also retains the unlinked X0X effects sources by Charles Vestal (GPL-3.0), after 9W9. Toolchain licences
 for the WASM runtime are in `web/licenses/`.
+
+`firmware-engine.json` records the FM-1 snapshot and file hashes for the
+shared synth. The web bridge and controls are maintained here.

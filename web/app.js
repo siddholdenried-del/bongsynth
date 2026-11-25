@@ -209,6 +209,7 @@ function computeCycle(){
   for(const [id,v] of open)x.gs_set(id,v);raw=grab();
   for(const [id] of open)x.gs_set(id,state.sound[id]);voiced=grab();cycleDirty=false;
 }
+const syncBeats={"4 BARS":16,"2 BARS":8,"1 BAR":4,"1/2":2,"1/4.":1.5,"1/4":1,"1/8.":.75,"1/8":.5,"1/8T":1/3,"1/16":.25,"1/16T":1/6,"1/32":.125};
 const hz=t=>{const m=/([\d.]+)\s*(K?)HZ/.exec(t);return m?+m[1]*(m[2]?1000:1):1;};
 const lfoWave=(shape,ph,seed)=>{const p=ph-Math.floor(ph),r=n=>{const s=Math.sin((Math.floor(ph)+n)*12.9898+seed)*43758.5453;return (s-Math.floor(s))*2-1;};
   switch(shape){case "SINE":return Math.sin(2*Math.PI*p);case "TRI":case "TRIANGLE":return p<.5?4*p-1:3-4*p;case "SAW UP":return 2*p-1;case "SAW":case "SAW DOWN":return 1-2*p;
@@ -243,7 +244,7 @@ function drawPlot(d,kindOverride){
   const now=performance.now()/1000;
   if(kind==="lfo2"||kind==="lfo1"){
     // the read point stays in the centre and the wave scrolls through it
-    const shape=kind==="lfo2"?str(x.gs_param_text(42,state.sound[42])):LFO_SHAPES[state.lfo[0]],rate=kind==="lfo2"?hz(str(x.gs_param_text(43,state.sound[43]))):lfoHz(state.lfo[1]);
+    const shape=kind==="lfo2"?str(x.gs_param_text(42,state.sound[42])):LFO_SHAPES[state.lfo[0]],rate=kind==="lfo2"?((state.sound[45]&2)?state.bpm/60/(syncBeats[str(x.gs_param_text(43,state.sound[43]))]||1):hz(str(x.gs_param_text(43,state.sound[43])))):lfoHz(state.lfo[1]);
     const depth=kind==="lfo1"?Math.abs(state.lfo[2])/64:1,cycles=Math.min(8,Math.max(1.5,rate*2)),span=cycles/rate;
     for(let x0=0;x0<w;x0++)ys.push(mid-lfoWave(shape,(now+(x0/(w-1)-.5)*span)*rate,7)*amp*.9*Math.max(.08,depth));
     plot(g,ys,C.acc,2);g.fillStyle=C.ink;g.fillRect(w>>1,top,1,bot-top);g.fillRect((w>>1)-2,Math.round(ys[w>>1])-2,5,5);return;

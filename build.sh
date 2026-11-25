@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds web/bongsynth.wasm from the files in this folder (Emscripten 4.0.11, or set EMCC).
+# Builds web/bongsynth.wasm from the files in this folder (Emscripten 7.0.0, or set EMCC).
 set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p gen

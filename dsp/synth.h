@@ -40,7 +40,9 @@ enum {                                    /* a sound's parameters (the order of 
 
 /* the matrix's sources: the bipolar ones -1..1 (LFO 1, LFO 2, NOTE: the note from C4, RANDOM: each note's own),
  * the others 0..1 */
-enum { MS_OFF, MS_LFO1, MS_LFO2, MS_MENV, MS_FENV, MS_AENV, MS_VEL, MS_NOTE, MS_RND, MS_M1, MS_M2, MS_M3, MS_M4, MS_NUM };
+enum { MS_OFF, MS_LFO1, MS_LFO2, MS_MENV, MS_FENV, MS_AENV, MS_VEL, MS_NOTE, MS_RND, MS_M1, MS_M2, MS_M3, MS_M4,
+       MS_PRESS,                          /* (0.5) the keys' pressure, the track's hardest-held key, 0..1 */
+       MS_NUM };
 /* its destinations: at amount +-64 a source of 1 moves PITCH and OSC 2 (OSC 2's pitch) +-48 semitones (the amount
  * squared: fine near 0), DETUNE +-127 cents, CUTOFF its whole range, the 0..127 parameters 127 steps, BIAS 64, LEVEL
  * up to twice or to nothing, PAN all the way, LFO 2 RATE 127 steps of its rate */
@@ -67,6 +69,7 @@ enum { SYN_PRESET_COLOR_KEEP, SYN_PRESET_COLOR_CLEAN, SYN_PRESET_COLOR_TAPE, SYN
        SYN_PRESET_COLOR_EDGE, SYN_PRESET_COLOR_DUST };
 int syn_preset_color(int i); /* a contiguous DSP factory index (not a user's project ID) */
 int syn_presets(void);
+int syn_preset_trim(int i);               /* factory sound i's level trim, tenths of a dB (synth_levels.inc) */
 const char *syn_preset_name(int i);
 int syn_preset(int i, int8_t *v);         /* fills v[SP_NUM]; returns 1 for a MONO sound, 0 for POLY */
 void syn_defaults(int8_t *v, int from);   /* v[from..SP_NUM - 1] at their defaults (a format-1 sound: from SP_NUM_V1) */
@@ -75,13 +78,16 @@ void syn_init(void);
 void syn_sound(int trk, const int8_t *v); /* every parameter of the track's sound */
 void syn_set(int trk, int id, int v);
 void syn_level(int trk, float level);     /* 0..1 */
+void syn_tempo(float bpm);                /* for LFO 2 synced (RESTART: NOTE SYNC, FREE SYNC) */
+void syn_text_track(int trk);             /* the track syn_param_text reads LFO 2's RATE by (a division when synced) */
+void syn_pressure(int trk, float p);      /* the keys' pressure on the track, 0..1 (the matrix's PRESSURE; slewed a block at a time) */
 /* a note: vel 0..1; gate in samples before it lets go by itself, < 0 held until syn_note_off. mono: MONO (one note,
  * SP_VOICES the unison stack, the held keys a stack it goes back down, SP_LEGATO: 1 ON, glide whenever the voice still
  * sounds; 2 SLIDE, glide only into a tied note, as a 303; SP_GLIDE); else POLY (SP_VOICES
  * the track's cap) */
 void syn_note_on(int trk, int note, float vel, int32_t gate, int mono);
 /* the same with a 303's marks (0.4: the sequencer's steps): SN_SLIDE, the track's note still held glides to this one
- * (MONO, POLY or SAMPLER, whatever LEGATO says; GLIDE's time, or 58 ms with GLIDE at 0), no new attack; SN_ACCENT,
+ * (MONO or POLY, whatever LEGATO says; GLIDE's time, or 58 ms with GLIDE at 0), no new attack; SN_ACCENT,
  * louder and a filter sweep */
 #define SN_SLIDE 1
 #define SN_ACCENT 2
@@ -95,23 +101,11 @@ void syn_pool(int n);                     /* the voices that may sound, 1..SYN_V
 int syn_voices(int trk);                  /* voices sounding (trk < 0: all) */
 int syn_pitch16(int trk);                 /* the track's newest voice's pitch now, 1/16 semitone; -1 none */
 
-/* SAMPLER tracks (PLAN.md, phase 3): the track's source is a sample instead of the oscillators, through the same drive,
- * filter, envelopes and pool. 12-bit, packed two in three bytes (s0 low 8 bits; s0 high 4 | s1 low 4 << 4; s1 high 8
- * bits), frames at rate Hz. The data stays the caller's (in place in the flash, or a recording in RAM) and must not
- * change while it is set: set 0 first. A new source or sample frees the track's voices; a note on a SAMPLER track with
- * no sample is silent */
-void syn_source(int trk, int sampler);
-void syn_sample(int trk, const uint8_t *packed, uint32_t frames, uint32_t rate);
-/* where the sample plays: start, end and the loop's start in thousandths of it (the loop start moved to the nearest
- * rising zero crossing); loop 0 once, 1 round from the loop start to the end; root the note that plays it at its own
- * pitch; tune -50..50 cents */
-void syn_sample_shape(int trk, int start, int end, int loop, int lstart, int root, int tune);
-uint32_t syn_sample_frames(int trk);
-
 /* modulation (PLAN.md, phase 4): a track's LFO, set once a block before syn_prepare. lfo -1..1, depth -1..1. CUTOFF moves
  * +-64 of the 128 cutoff steps (about 4 octaves), PITCH +-12 semitones, LEVEL dips by up to all of it, PWM and the rest
- * +-64 of 127, START (a SAMPLER) +-half the sample, as each note starts */
-enum { SM_CUTOFF, SM_PITCH, SM_LEVEL, SM_PWM, SM_RESO, SM_DETUNE, SM_MIX, SM_DRIVE, SM_NOISE, SM_SUB, SM_START, SM_NUM };
+ * +-64 of 127 */
+enum { SM_CUTOFF, SM_PITCH, SM_LEVEL, SM_PWM, SM_RESO, SM_DETUNE, SM_MIX, SM_DRIVE, SM_NOISE, SM_SUB, SM_NUM };   /* (10 was
+                                          * START, the sampler's, until 0.5: a saved one loads CUTOFF at depth 0) */
 void syn_mod(int trk, int dest, float lfo, float depth);
 int syn_get(int trk, int id);             /* a parameter as the voices use it now (a lock's value included) */
 int syn_probe(int trk, int what);         /* tests, the track's newest voice: 0 its pitch (1/16 semitone, the LFO's
@@ -123,15 +117,18 @@ int syn_probe(int trk, int what);         /* tests, the track's newest voice: 0 
                                            * as the voice plays it (the matrix's moves in); -1 none */
 
 void syn_prepare(void);
+void syn_split(int share0_q8);          /* the voices' share for syn_half(0), of 256 (128: one each in turn) */
 void syn_half(uint32_t half);
 /* the mixer's view of a track (phase 5): pan 0..127 (64 the centre), its reverb and delay sends 0..1 */
 void syn_mixer(int trk, int pan, float rev, float dly);
-/* Optional track insert, called once per new synth block before pan/shared sends/stem. It returns 1 when it did
- * nothing and has nothing to give (silence in, its chain asleep on silence): the mix then leaves the track alone, and
- * the insert uncalled, until a voice sounds on it again (0.5: three silent tracks' inserts cost 3 % of a block) */
-typedef int (*syn_insert_fn)(int trk, float *l, float *r, unsigned frames);
-void syn_set_insert(int trk, syn_insert_fn fn);
-void syn_mix_repack(float *l, float *r, float *rev, float *dly); /* merge unmuted cached blocks without running inserts twice */
+/* a held performance move on a track (the Quick Mixer's white keys): cut, cutoff steps added (-127..127, slewed over
+ * about 30 ms); rev, dly 0..1 how far its reverb and delay sends are raised toward 0.9 (ramped over about 17 ms).
+ * All 0: back to the track's own settings, whatever they are by then. Nothing of the sound is changed or saved */
+void syn_perform(int trk, int cut, float rev, float dly, int oct);   /* oct: octaves up / down while held */
+int syn_perform_now(int trk, int what);  /* (the tests) 0 the cutoff offset now in steps; 1, 2 the boosts x 1000; 3 the octaves */
+int syn_voice_view(int trk, int what, uint8_t *stage, float *a, float *b, int max);   /* (the screen) */
+float syn_slot_now(int trk, int slot);  /* (the screen) a matrix slot's move now, on the newest voice */
+void syn_mix_repack(float *l, float *r, float *rev, float *dly); /* merge unmuted cached blocks after a track cut */
 void syn_mix(float *l, float *r, float *rev, float *dly);   /* SYN_CTL samples each, overwritten: the mix and its sends */
 /* the same in parts (0.5: the tracks' mix shared between the two cores): each track once, on either core (its
  * buffers, its insert and its meters are its own), then the mix of them */

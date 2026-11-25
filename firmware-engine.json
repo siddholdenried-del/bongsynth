@@ -1,0 +1,21 @@
+{
+  "commit": "31fccda0321f403bab914f7f094e4f38e7a906d1",
+  "files": {
+    "dsp/fastmath.h": "d8e129b05237cfd659a3aeb645db3366366df134935418019b8eb09d1b140b95",
+    "dsp/felucca/LICENSE-MIT": "8d7a6483ea3289b07b1d9d5a4b760c8e6c69d22ca4248cad6fec14afa0ee5f4b",
+    "dsp/felucca/UPSTREAM.txt": "edb573ada713dddc099076fab125ef49bc0a72fb48f9e2c728ade9b8dc9b4118",
+    "dsp/felucca/dsp.c": "60aa8795a28f862ef206dda8d86a92dfd25a6eefff0caa8e39340ad461e59a8f",
+    "dsp/felucca/eng_analog.c": "45321386621a0b0c9c4d41707a232981e14c3c3e448578f99fca02855bc5fe3b",
+    "dsp/felucca/felucca_engine.h": "176d3a044ade0d61858cbfdd4feda7eee249e40f29cd2893788465747831f752",
+    "dsp/gm_ram.h": "da4796f72f234855592c457063b91f63c29b59d877a81d15395edc57723e55e7",
+    "dsp/preset_bank_dub.inc": "66eca603d1658750b5e201dc6bd70cf1db620bd2c21fdd17922a7c861d198d20",
+    "dsp/preset_bank_electro.inc": "9e9d6b2acb138b3884439a975dc585a4c1b6f5a7e9f6128c89e3714f791cbce5",
+    "dsp/preset_bank_house.inc": "1c18e28da4592fcf470f73474da365aa32c61fcbae4a8eb1f58186808bbc713e",
+    "dsp/preset_bank_warehouse.inc": "35e458c017a5f976f8fcabc2448edf75b3130d72f05b8b3c3d690ba7e71f2335",
+    "dsp/synth.c": "67e70ca4f85d0b0a7fc93fe543805f6c556e9979fc3f4ee78971397d20dd7673",
+    "dsp/synth.h": "103bcc0a8871cf05b8a62f1bd2c2aa55f0c1968571f07ca3fea3eb063e85f7a4",
+    "dsp/synth_expansion.inc": "638c3ccc26cde93dec44d08613bc79b6ea08b6380923a9e16018cbde5b801077",
+    "dsp/synth_levels.inc": "9152365be5c0b4730517448f3e13a4bae1e45d94f955670345de84ae252d6f82",
+    "tools/gen_engine_tables.py": "b0281413501096f33a850ff5f9a4b5a687929a625f93aa5f565ba14c47bcae5b"
+  }
+}

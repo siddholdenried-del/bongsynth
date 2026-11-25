@@ -37,6 +37,7 @@ void gs_init(void)
 {
     int i;
     syn_init();
+    syn_tempo(bpm);
     for (i = 0; i < STEPS; i++) {
         st_note[i] = 36;
         st_flag[i] = 0;
@@ -59,6 +60,7 @@ const char *gs_param_text(int id, int v)
     int i;
     for (i = 0; i < 32; i++)
         text[i] = 0;
+    syn_text_track(TRK);
     syn_param_text(id, v, text);
     return text;
 }
@@ -97,7 +99,7 @@ void gs_note_on(int note, int vel) { if (note >= 0 && note < 128) syn_note_on(TR
 void gs_note_off(int note) { if (note >= 0 && note < 128) syn_note_off(TRK, note); }
 void gs_panic(void) { syn_release(TRK, 0); }
 
-void gs_tempo(int bpm10) { if (bpm10 >= 400 && bpm10 <= 2400) { bpm = (float)bpm10 * 0.1f; } }
+void gs_tempo(int bpm10) { if (bpm10 >= 400 && bpm10 <= 2400) { bpm = (float)bpm10 * 0.1f; syn_tempo(bpm); } }
 void gs_step_set(int i, int note, int flags)
 {
     if (i < 0 || i >= STEPS || note < 0 || note > 127)

@@ -41,9 +41,15 @@ static const char *const N_WAVE2[] = {"SAME", "SAW", "SQUARE", "TRI", "SINE", "P
 static const char *const N_SHTYPE[] = {"FOLD", "CLIP", "RECTIFY", "CRUSH"};
 static const char *const N_SHPOS[] = {"PRE FLT", "POST FLT"};
 static const char *const N_LSHAPE[] = {"SINE", "TRIANGLE", "SAW UP", "SAW DOWN", "SQUARE", "S&H", "SMOOTH"};
-static const char *const N_L2KEY[] = {"EACH NOTE", "FREE"};
+static const char *const N_L2KEY[] = {"EACH NOTE", "FREE", "NOTE SYNC", "FREE SYNC"};   /* (0.5) + 2: its RATE a division of the tempo */
+#define L2_NDIV 12
+static const char *const N_L2DIV[L2_NDIV] = {"4 BARS", "2 BARS", "1 BAR", "1/2", "1/4.", "1/4", "1/8.", "1/8", "1/8T", "1/16",
+                                             "1/16T", "1/32"};
+static const float L2_BEATS[L2_NDIV] = {16.0f, 8.0f, 4.0f, 2.0f, 1.5f, 1.0f, 0.75f, 0.5f, 0.33333f, 0.25f, 0.16667f, 0.125f};
+static float syn_bpm = 120.0f;
+static int text_sync;                     /* syn_param_text: LFO 2's RATE reads as a division (syn_text_track's track is synced) */
 static const char *const N_MSRC[MS_NUM] = {"OFF", "LFO 1", "LFO 2", "MOD ENV", "FILT ENV", "AMP ENV", "VELOCITY", "NOTE",
-                                          "RANDOM", "MACRO 1", "MACRO 2", "MACRO 3", "MACRO 4"};
+                                          "RANDOM", "MACRO 1", "MACRO 2", "MACRO 3", "MACRO 4", "PRESSURE"};
 static const char *const N_MDST[MD_NUM] = {"PITCH", "OSC 2", "DETUNE", "CUTOFF", "RESO", "PWM", "MIX", "SUB", "NOISE",
                                           "DRIVE", "FM", "RING", "SHAPER", "BIAS", "LEVEL", "PAN", "LFO 2 RATE"};
 #define SLOT(n) {"MOD" #n " SRC", 0, MS_NUM - 1, 0, SF_ENUM, N_MSRC}, {"MOD" #n " DEST", 0, MD_NUM - 1, 0, SF_ENUM, N_MDST}, \
@@ -94,7 +100,7 @@ static const syn_param_t PARAMS[SP_NUM] = {
     {"SHAPE", 0, 6, 0, SF_ENUM, N_LSHAPE},
     {"RATE", 0, 127, 91, SF_LFOHZ, 0},
     {"FADE IN", 0, 127, 0, SF_FADE, 0},
-    {"RESTART", 0, 1, 0, SF_ENUM, N_L2KEY},
+    {"RESTART", 0, 3, 0, SF_ENUM, N_L2KEY},
     SLOT(1), SLOT(2), SLOT(3), SLOT(4), SLOT(5), SLOT(6),
 };
 _Static_assert(SP_NUM == 64, "a sound's parameters: 64 (the app's lock mask is 64 bits)");
@@ -155,10 +161,17 @@ static char *put_tenths(char *b, float x, const char *unit)   /* 1.2 S */
     return put_str(b, unit);
 }
 
+void syn_tempo(float bpm) { syn_bpm = bpm; }
+
 void syn_param_text(int id, int v, char *buf)
 {
     const syn_param_t *p = syn_param(id);
     char *b = buf;
+    if (id == SP_L2RATE && text_sync && v >= 0 && v <= 127) {
+        b = put_str(b, N_L2DIV[v * L2_NDIV / 128]);   /* LFO 2 synced: the division its RATE picks */
+        *b = 0;
+        return;
+    }
     if (p) {
         switch (p->fmt) {
         case SF_ENUM:
@@ -308,6 +321,16 @@ void syn_defaults(int8_t *v, int from)
     for (k = from; k < SP_NUM; k++)
         v[k] = PARAMS[k].def;
 }
+/* each factory sound's level trim, tenths of a dB (0.5): measured (tests/synth_levels.c: a note or a chord, the loudest
+ * 100 ms, K-weighted) so every preset comes up about as loud. The app applies it with the track's level */
+static const int8_t PRESET_TRIM[] = {
+#include "synth_levels.inc"
+};
+int syn_preset_trim(int i)
+{
+    return i >= 0 && i < (int)(sizeof PRESET_TRIM / sizeof PRESET_TRIM[0]) && i < NPRESETS ? PRESET_TRIM[i] : 0;
+}
+
 int syn_preset(int i, int8_t *v)
 {
     const int8_t *e;
@@ -335,7 +358,6 @@ typedef struct {
     float aenv, fenv;                     /* 0..1 */
     float pc, pt;                         /* the pitch now and where it goes, 1/16 semitone */
     float vel;                            /* the velocity's gain */
-    float pos, sinc;                      /* SAMPLER: the read position (frames) and its step a sample */
     int32_t p16;                          /* the pitch this block (syn_probe) */
     float gl, gr;                         /* pan gains (both 1: the centre) */
     int32_t amp;                          /* the amplitude a block ago, Q15 */
@@ -363,14 +385,8 @@ static vx_t vx[NVOICE];
 static struct {
     int8_t v[SP_NUM];
     float level;
+    float press, press_to;                /* the keys' pressure, and where it is going */
     uint8_t stack[8], nstack;             /* MONO: the keys held, the newest last */
-    /* SAMPLER */
-    uint8_t sampler, loop, root;
-    const uint8_t *smp;
-    uint32_t frames;
-    float srate, tunef;                   /* the sample's rate / 44100; the tune as a factor */
-    int16_t pm[3];                        /* start, end, loop start, thousandths */
-    uint32_t s0, s1, sl;                  /* the same in frames */
     /* the LFO */
     uint8_t mdest;
     float mlfo, mdepth;
@@ -401,7 +417,14 @@ static int32_t acc_t[2][SYN_CTL];
 static uint8_t used_m[2][SYN_TRACKS], used_lr[2][SYN_TRACKS];
 static struct {
     float pl, pr, rs, ds;                 /* the track's pan gains and its sends */
+    float rb, db, rb_to, db_to;           /* a held move's send boosts now and where they go (syn_perform), 0..1 */
 } mix[SYN_TRACKS];
+/* a held move's cutoff offset now and where it goes (syn_perform), 1/256 cutoff steps; slewed a control block at a time */
+static float pcut[SYN_TRACKS], pcut_to[SYN_TRACKS];
+static int32_t poct[SYN_TRACKS];         /* a held OCT move: the track's voices that many 1/16 semitones up / down */
+#define PF_CUT_STEP (96.0f * 256.0f / 40.0f)   /* the offset's slew a control block: 96 steps in about 29 ms */
+#define PF_SEND_STEP (1.0f / 24.0f)       /* a boost's a control block: all the way in about 17 ms, a sample at a time */
+#define PF_SEND_TOP 0.9f                  /* a boost's send: the track's own raised toward this */
 
 static void push(int t)                   /* the track's sound -> the engine's parameters */
 {
@@ -433,7 +456,7 @@ static void push(int t)                   /* the track's sound -> the engine's p
 /* the LFO on the engine's own parameters: the track's values, moved, for this block */
 static void push_mod(int t)
 {
-    static const int8_t P_OF[SM_NUM] = {-1, -1, -1, -1, P_E5, P_E1, P_E2, P_E6, P_E3, P_SUB, -1};
+    static const int8_t P_OF[SM_NUM] = {-1, -1, -1, -1, P_E5, P_E1, P_E2, P_E6, P_E3, P_SUB};
     int d = tk[t].mdest, k;
     push(t);
     if (d < 0 || d >= SM_NUM || (k = P_OF[d]) < 0)
@@ -505,12 +528,9 @@ void syn_init(void)
         tk[t].level = 0.8f;
         mix[t].pl = mix[t].pr = 1.0f;
         mix[t].rs = mix[t].ds = 0.0f;
-        tk[t].sampler = 0;
-        tk[t].smp = 0;
-        tk[t].frames = 0;
-        tk[t].srate = tk[t].tunef = 1.0f;
-        tk[t].root = 60;
-        tk[t].pm[1] = 1000;
+        mix[t].rb = mix[t].db = mix[t].rb_to = mix[t].db_to = 0.0f;
+        pcut[t] = pcut_to[t] = 0.0f;
+        poct[t] = 0;
         xm_scan(t);
         push(t);
     }
@@ -549,164 +569,83 @@ void syn_set(int t, int id, int v)
     push(t);
 }
 
-/* ------------------------------------------------------------- SAMPLER source --- */
-GM_INLINE int32_t s12_q15(const uint8_t *d, uint32_t i)   /* frame i, Q15 */
-{
-    const uint8_t *b = d + (i >> 1) * 3u;
-    int32_t v = (i & 1u) ? (int32_t)(b[1] >> 4) | (int32_t)b[2] << 4 : (int32_t)b[0] | (int32_t)(b[1] & 0x0Fu) << 8;
-    if (v & 0x800)
-        v -= 4096;
-    return v * 16;                        /* (a negative << is undefined in C) */
-}
-
-static uint32_t zero_near(const uint8_t *d, uint32_t at, uint32_t lo, uint32_t hi)   /* a rising zero crossing */
-{
-    uint32_t k;
-    for (k = 0; k < 256u; k++) {
-        if (at + k + 1u < hi && s12_q15(d, at + k) <= 0 && s12_q15(d, at + k + 1u) > 0)
-            return at + k + 1u;
-        if (at >= lo + k + 1u && s12_q15(d, at - k - 1u) <= 0 && s12_q15(d, at - k) > 0)
-            return at - k;
-    }
-    return at;
-}
-
-static void shape(int t)                  /* the thousandths -> frames */
-{
-    uint32_t n = tk[t].frames, s0, s1, sl;
-    if (n < 2u) {
-        tk[t].s0 = tk[t].s1 = tk[t].sl = 0;
-        return;
-    }
-    s0 = (uint32_t)tk[t].pm[0] * n / 1000u;
-    s1 = (uint32_t)tk[t].pm[1] * n / 1000u;
-    if (s1 > n)
-        s1 = n;
-    if (s0 + 2u > s1)                     /* at least two frames, start before end */
-        s0 = s1 >= 2u ? s1 - 2u : 0;
-    if (s0 + 2u > s1)
-        s1 = s0 + 2u;
-    sl = (uint32_t)tk[t].pm[2] * n / 1000u;
-    if (sl < s0)
-        sl = s0;
-    if (sl + 2u > s1)
-        sl = s1 - 2u;
-    if (tk[t].smp)
-        sl = zero_near(tk[t].smp, sl, s0, s1 - 1u);
-    tk[t].s0 = s0;
-    tk[t].s1 = s1;
-    tk[t].sl = sl;
-}
-
-static void free_track(int t)             /* the track's voices, gone at once (its source changed) */
-{
-    int i;
-    for (i = 0; i < NVOICE; i++)
-        if (vx[i].trk == t) {
-            vx[i].trk = 0;
-            vx[i].astage = vx[i].fstage = vx[i].mstage = 0;
-            vv[i].active = 0;
-        }
-    tk[t].nstack = 0;
-}
-
-void syn_source(int t, int sampler)
-{
-    if (t < 1 || t >= SYN_TRACKS || tk[t].sampler == (sampler != 0))
-        return;
-    free_track(t);
-    tk[t].sampler = (uint8_t)(sampler != 0);
-}
-
-void syn_sample(int t, const uint8_t *packed, uint32_t frames, uint32_t rate)
-{
-    if (t < 1 || t >= SYN_TRACKS)
-        return;
-    free_track(t);
-    tk[t].smp = frames >= 2u ? packed : 0;
-    tk[t].frames = tk[t].smp ? frames : 0;
-    tk[t].srate = (float)(rate ? rate : 44100u) / 44100.0f;
-    shape(t);
-}
-
-void syn_sample_shape(int t, int start, int end, int loop, int lstart, int root, int tune)
-{
-    if (t < 1 || t >= SYN_TRACKS)
-        return;
-    tk[t].pm[0] = (int16_t)clamp(start, 0, 1000);
-    tk[t].pm[1] = (int16_t)clamp(end, 0, 1000);
-    tk[t].pm[2] = (int16_t)clamp(lstart, 0, 1000);
-    tk[t].loop = (uint8_t)(loop != 0);
-    tk[t].root = (uint8_t)clamp(root, 0, 127);
-    tk[t].tunef = 1.0f + (float)clamp(tune, -50, 50) * 0.000578f;   /* 2^(c / 1200), near enough for +-50 cents */
-    shape(t);
-}
-
-uint32_t syn_sample_frames(int t) { return t >= 1 && t < SYN_TRACKS ? tk[t].frames : 0; }
-
-/* a SAMPLER voice's block: the sample read at its step, linearly between frames, round its loop or ending at its end,
- * then the drive and the filter as ANALOG's, and the amplitude */
-GM_RAM static void sample_render(int t, int i, const track_t *tp, int32_t *out, uint32_t n)
-{
-    voice_t *v = &vv[i];
-    vx_t *x = &vx[i];
-    const int16_t *p = tp->p;
-    const uint8_t *d = tk[t].smp;
-    float pos = x->pos, inc = x->sinc, end = (float)tk[t].s1, lst = (float)tk[t].sl;
-    uint32_t last = tk[t].frames - 1u, k, ft = (uint32_t)p[P_FTYPE];
-    int loop = tk[t].loop && tk[t].s1 > tk[t].sl + 16u;
-    int32_t cut = (p[P_E4] << 8) + x->m.cutoff + (p[P_E7] * (v->pitch16 - 60 * 16) >> 4);
-    int32_t ic1 = v->s[0], ic2 = v->s[1], drv = p[P_E6], drive = 32768 + p[P_E6] * 512, fk = ANALOG_K(p[P_E5]);
-    tsvf_t flt;
-    shp_t sh;
-    uint32_t shp = p[P_SHA] ? 1u + (uint32_t)(p[P_SHPOS] != 0) : 0u;   /* the SHAPER: 0 off, 1 PRE, 2 POST */
-    if (!d)
-        return;
-    if (shp)
-        shp_begin(&sh, p, v, x->m.inc);
-    tsvf_coef(&flt, cut, p[P_E5]);
-    for (k = 0; k < n; k++) {
-        int32_t a, b, s, y;
-        uint32_t ip;
-        if (pos >= end) {
-            if (!loop) {                  /* once through: the voice is done (freed at the next block) */
-                x->astage = x->fstage = x->mstage = 3;
-                x->aenv = 0.0f;
-                break;
-            }
-            pos = lst + (pos - end);
-            if (pos >= end)
-                pos = lst;
-        }
-        ip = (uint32_t)pos;
-        a = s12_q15(d, ip);
-        b = s12_q15(d, ip < last ? ip + 1u : ip);
-        s = a + (int32_t)((float)(b - a) * (pos - (float)ip));
-        pos += inc;
-        if (shp == 1u)
-            s = shp_run(&sh, s);
-        if (drv)
-            s = softclip(((s >> 2) * (drive >> 2)) >> 11);
-        y = soft_knee(analog_tap(&flt, fk, s >> 1, &ic1, &ic2, ft), 16000);
-        if (shp == 2u)
-            y = clamp(shp_run(&sh, y), -32767, 32767);
-        out[k] += voice_amp(y * 2, &x->m, k) * 2;
-    }
-    x->pos = pos;
-    v->s[0] = ic1;
-    v->s[1] = ic2;
-    if (shp)
-        shp_end(&sh, v);
-}
-
 GM_INLINE void render_voice(int i, int32_t *out)
 {
     int t = vx[i].trk;
     const track_t *tp = vx[i].usep ? &vx[i].pv : &trk[t];   /* the matrix moved some of its parameters: its own */
-    if (tk[t].sampler)
-        sample_render(t, i, tp, out, SYN_CTL);
-    else                                  /* (ENG_ANALOG.render, called directly: RAM code calls no pointer) */
-        analog_render((track_t *)tp, &vv[i], out, SYN_CTL, &vx[i].m);
+    analog_render((track_t *)tp, &vv[i], out, SYN_CTL, &vx[i].m);   /* (ENG_ANALOG.render, called directly: RAM code
+                                                                     * calls no pointer) */
+}
+
+void syn_perform(int t, int cut, float rev, float dly, int oct)
+{
+    if (t < 1 || t >= SYN_TRACKS)
+        return;
+    pcut_to[t] = (float)clamp(cut, -127, 127) * 256.0f;
+    poct[t] = clamp(oct, -4, 4) * 192;    /* (at once: the notes sounding jump with it, the oscillators' phase kept) */
+    mix[t].rb_to = rev < 0.0f ? 0.0f : rev > 1.0f ? 1.0f : rev;
+    mix[t].db_to = dly < 0.0f ? 0.0f : dly > 1.0f ? 1.0f : dly;
+}
+
+/* (0.5, the screen) Track t's sounding voices, up to max: what 0 the amp envelope, 1 the filter's, 2 MOD ENV (stage:
+ * 1 attack, 2 decay / sustain, 3 release; a its level 0..1), 3 LFO 2 (a its phase 0..1, b its value -1..1) */
+int syn_voice_view(int t, int what, uint8_t *stage, float *a, float *b, int max)
+{
+    int i, n = 0;
+    for (i = 0; i < NVOICE && n < max; i++) {
+        const vx_t *x = &vx[i];
+        if (x->trk != t || !x->astage)
+            continue;
+        stage[n] = what == 0 ? x->astage : what == 1 ? x->fstage : what == 2 ? x->mstage : 1;
+        a[n] = what == 0 ? x->aenv : what == 1 ? x->fenv : what == 2 ? x->menv : x->l2ph;
+        b[n] = what == 3 ? x->l2out : 0.0f;
+        n++;
+    }
+    return n;
+}
+
+/* (0.5, the screen) Matrix slot k's move now on track t's newest voice: its source times its amount, -1..1-ish (0:
+ * no voice, or the slot off) */
+float syn_slot_now(int t, int k)
+{
+    const int8_t *s;
+    const vx_t *x;
+    int i, best = -1, src, amt;
+    float sv;
+    if (t < 1 || t >= SYN_TRACKS || k < 0 || k >= SYN_SLOTS)
+        return 0.0f;
+    for (i = 0; i < NVOICE; i++)
+        if (vx[i].trk == t && vx[i].astage && (best < 0 || (int32_t)(vv[i].age - vv[best].age) > 0))
+            best = i;
+    s = tk[t].v;
+    src = s[SP_XM + 3 * k];
+    amt = s[SP_XM + 3 * k + 2];
+    if (best < 0 || !src || !amt || src >= MS_NUM)
+        return 0.0f;
+    x = &vx[best];
+    switch (src) {
+    case MS_LFO1: sv = tk[t].mlfo; break;
+    case MS_LFO2: sv = x->l2out; break;
+    case MS_MENV: sv = x->menv; break;
+    case MS_FENV: sv = x->fenv; break;
+    case MS_AENV: sv = x->aenv; break;
+    case MS_VEL: sv = x->velr; break;
+    case MS_NOTE: sv = ((float)vv[best].note - 60.0f) * (1.0f / 60.0f); break;
+    case MS_RND: sv = x->rnd; break;
+    case MS_PRESS: sv = tk[t].press; break;
+    default: sv = (float)s[SP_M1 + src - MS_M1] * (1.0f / 127.0f); break;
+    }
+    return sv * (float)amt * (1.0f / 64.0f);
+}
+
+int syn_perform_now(int t, int what)       /* a held move now (the tests): 0 the cutoff offset in steps, 1 2 the boosts x 1000 */
+{
+    if (t < 1 || t >= SYN_TRACKS)
+        return 0;
+    if (what == 3)
+        return (int)(poct[t] / 192);
+    return what == 0 ? (int)(pcut[t] / 256.0f + (pcut[t] < 0.0f ? -0.5f : 0.5f))
+                     : (int)((what == 1 ? mix[t].rb : mix[t].db) * 1000.0f + 0.5f);
 }
 
 void syn_mixer(int t, int pan, float rev, float dly)
@@ -721,10 +660,18 @@ void syn_mixer(int t, int pan, float rev, float dly)
     mix[t].ds = dly < 0.0f ? 0.0f : dly;
 }
 
+void syn_text_track(int t) { text_sync = t >= 1 && t < SYN_TRACKS && (tk[t].v[SP_L2KEY] & 2); }
+
+void syn_pressure(int t, float p)
+{
+    if (t >= 1 && t < SYN_TRACKS)
+        tk[t].press_to = p < 0.0f ? 0.0f : p > 1.0f ? 1.0f : p;
+}
+
 void syn_level(int t, float level)
 {
     if (t >= 1 && t < SYN_TRACKS)
-        tk[t].level = level < 0.0f ? 0.0f : level > 1.0f ? 1.0f : level;
+        tk[t].level = level < 0.0f ? 0.0f : level > 4.0f ? 4.0f : level;   /* (over 1: a quiet preset's trim, 0.5) */
 }
 
 static void rel(int i)                    /* a voice lets go */
@@ -814,11 +761,6 @@ static void voice_start(int i, int t, int note, float vel, int32_t gate, int uni
         v->s[0] = s0;
         v->s[1] = s1;
     }
-    x->pos = (float)tk[t].s0;             /* SAMPLER: from its start (the LFO's START moves it) */
-    if (tk[t].mdest == SM_START && tk[t].mdepth != 0.0f && tk[t].s1 > tk[t].s0 + 2u) {
-        float p = x->pos + tk[t].mlfo * tk[t].mdepth * 0.5f * (float)(tk[t].s1 - tk[t].s0);
-        x->pos = p < 0.0f ? 0.0f : p > (float)(tk[t].s1 - 2u) ? (float)(tk[t].s1 - 2u) : p;
-    }
     x->trk = (uint8_t)t;
     x->choke = 0;
     x->held = (uint8_t)(gate < 0);
@@ -831,7 +773,7 @@ static void voice_start(int i, int t, int note, float vel, int32_t gate, int uni
     x->acc = (uint8_t)((nflags & SN_ACCENT) != 0);
     x->accenv = x->acc ? 1.0f : 0.0f;
     x->rnd = rnd1();
-    x->l2ph = s[SP_L2KEY] ? (rnd1() + 1.0f) * 0.5f : 0.0f;   /* LFO 2: from its start each note, or anywhere */
+    x->l2ph = (s[SP_L2KEY] & 1) ? (rnd1() + 1.0f) * 0.5f : 0.0f;   /* LFO 2: from its start each note, or anywhere */
     x->l2a = x->l2b;
     x->l2b = rnd1();
     x->l2fade = s[SP_L2FADE] ? 0.0f : 1.0f;
@@ -960,7 +902,7 @@ void syn_note_on(int t, int note, float vel, int32_t gate, int mono) { syn_note_
 
 void syn_note_on_f(int t, int note, float vel, int32_t gate, int mono, int flags)
 {
-    if (t < 1 || t >= SYN_TRACKS || note < 1 || note > 127 || (tk[t].sampler && !tk[t].smp))
+    if (t < 1 || t >= SYN_TRACKS || note < 1 || note > 127)
         return;
     nflags = flags;
     if ((flags & SN_SLIDE) && slide_to(t, note, gate, mono)) {
@@ -1052,7 +994,7 @@ int syn_pitch16(int t)
     for (i = 0; i < NVOICE; i++)
         if (vx[i].trk == t && vx[i].astage && (best < 0 || (int32_t)(vv[i].age - vv[best].age) > 0))
             best = i;
-    return best < 0 ? -1 : (int)(vx[best].pc + 0.5f);
+    return best < 0 ? -1 : (int)(vx[best].pc + 0.5f) + (int)poct[t];   /* (a held OCT move with it) */
 }
 
 /* ---------------------------------------------------------------- a block --- */
@@ -1117,6 +1059,7 @@ static void matrix(int t, int i, float *acc)
         case MS_VEL: sv = x->velr; break;
         case MS_NOTE: sv = ((float)vv[i].note - 60.0f) * (1.0f / 60.0f); break;
         case MS_RND: sv = x->rnd; break;
+        case MS_PRESS: sv = tk[t].press; break;
         default: sv = (float)s[SP_M1 + src - MS_M1] * (1.0f / 127.0f); break;
         }
         a = (float)amt * (1.0f / 64.0f);
@@ -1126,11 +1069,23 @@ static void matrix(int t, int i, float *acc)
     }
 }
 
+/* GhettoMachine 0.5 (CPU): the voices' share for the first core (syn_half 0), of 256, the rest the second's: the app
+ * moves it so that both finish together (app.c syn_block). Dealt as Bresenham deals a line's steps: at 128, one each in
+ * turn, as before. Which core renders a voice changes nothing heard: each half's voices are summed in integers */
+static int split_q8 = 128;
+void syn_split(int share0_q8) { split_q8 = share0_q8 < 0 ? 0 : share0_q8 > 256 ? 256 : share0_q8; }
+
 void syn_prepare(void)
 {
-    int i, h = 0;
-    for (i = 1; i < SYN_TRACKS; i++)
+    int i, h = 0, deal = 128;
+    for (i = 1; i < SYN_TRACKS; i++) {
+        tk[i].press += (tk[i].press_to - tk[i].press) * 0.35f;   /* (a block at a time: no steps in the filter) */
         push_mod(i);
+        if (pcut[i] != pcut_to[i]) {      /* a held move's cutoff, slewed (syn_perform) */
+            const float d = pcut_to[i] - pcut[i];
+            pcut[i] = d > PF_CUT_STEP ? pcut[i] + PF_CUT_STEP : d < -PF_CUT_STEP ? pcut[i] - PF_CUT_STEP : pcut_to[i];
+        }
+    }
     for (i = 0; i < NVOICE; i++) {
         voice_t *v = &vv[i];
         vx_t *x = &vx[i];
@@ -1159,7 +1114,8 @@ void syn_prepare(void)
         x->menv = env_step(&x->mstage, x->menv, s, SP_MA, SP_MD, SP_MS, SP_MR);
         {   /* LFO 2: each note's own */
             int ri = clamp(s[SP_L2RATE] + (int32_t)x->l2rate, 0, 127);
-            x->l2ph += L2_INC[ri];
+            x->l2ph += (s[SP_L2KEY] & 2) ? syn_bpm * (1.0f / 60.0f) / L2_BEATS[ri * L2_NDIV / 128] * ((float)SYN_CTL / 44100.0f)
+                                         : L2_INC[ri];
             if (x->l2ph >= 1.0f) {
                 x->l2ph -= (float)(int32_t)x->l2ph;
                 x->l2a = x->l2b;
@@ -1190,7 +1146,7 @@ void syn_prepare(void)
         }
         mfine = x->fine;
         {
-            int32_t mp = tk[t].mdest == SM_PITCH ? (int32_t)(tk[t].mlfo * tk[t].mdepth * 192.0f) : 0;
+            int32_t mp = (tk[t].mdest == SM_PITCH ? (int32_t)(tk[t].mlfo * tk[t].mdepth * 192.0f) : 0) + poct[t];
             if (acc[MD_PITCH] == 0.0f && !s[SP_DRIFT]) {
                 p16 = clamp((int32_t)(x->pc + 0.5f) + mp, 0, 2047);
             } else {                      /* the matrix's and DRIFT's moves: between 1/16 semitones by the fine tune */
@@ -1207,9 +1163,6 @@ void syn_prepare(void)
             inc += (uint32_t)((int32_t)(inc >> 12) * mfine);
         v->pitch16 = v->pitch_cur = p16;
         x->m.inc = inc;
-        if (tk[t].sampler)                /* the sample's step: the note over its root, its rate, the tune, unison */
-            x->sinc = (float)pitch_inc((uint32_t)p16) / (float)pitch_inc((uint32_t)tk[t].root * 16u) * tk[t].srate *
-                      tk[t].tunef * (1.0f + (float)mfine * (1.0f / 4096.0f));
         x->m.pitch16 = p16;
         x->m.fine = mfine;
         a = x->aenv * x->vel * tk[t].level * UNI_GAIN[x->nuni <= 4 ? x->nuni : 4];
@@ -1236,6 +1189,8 @@ void syn_prepare(void)
         else if (tk[t].mdest == SM_PWM)
             x->m.shape = clamp(x->m.shape + (int32_t)(tk[t].mlfo * tk[t].mdepth * (63.0f * 256.0f)), 0,
                                127 << 8);
+        if (pcut[t] != 0.0f)              /* a held FILTER CLOSE / OPEN (syn_perform) */
+            x->m.cutoff += (int32_t)pcut[t];
         if (acc[MD_CUTOFF] != 0.0f)
             x->m.cutoff += (int32_t)(acc[MD_CUTOFF] * (127.0f * 256.0f));
         if (s[SP_DRIFT])
@@ -1279,8 +1234,11 @@ void syn_prepare(void)
         }
         x->m.envq15 = (int32_t)(x->aenv * 32767.0f);
         v->env = (int32_t)(x->aenv * 16777216.0f);
+        deal += split_q8;                 /* (the first core's when the deal reaches a whole voice) */
+        h = deal >= 256 ? 0 : 1;
+        if (!h)
+            deal -= 256;
         x->half = (uint8_t)h;
-        h ^= 1;
     }
 }
 
@@ -1324,9 +1282,6 @@ GM_RAM void syn_half(uint32_t h)
 static volatile float trk_pk[SYN_TRACKS];   /* each track's peak in the mix since the screen last looked */
 static float trk_l[SYN_TRACKS][SYN_CTL], trk_r[SYN_TRACKS][SYN_CTL];   /* the last block, each track alone */
 static float trk_send[SYN_TRACKS][SYN_CTL];
-static syn_insert_fn trk_insert[SYN_TRACKS];
-static uint32_t trk_idle[SYN_TRACKS];     /* the track's insert said it sleeps on silence (syn_insert_fn's 1): nothing to
-                                           * mix, nothing to call, until a voice sounds on the track or its insert is set */
 static uint32_t trk_on[SYN_TRACKS];       /* this block: the track is in the mix (syn_mix_track; a word each: either
                                            * core writes its own tracks') */
 static uint32_t trk_used;                 /* bit t: track t sounded in it */
@@ -1355,14 +1310,6 @@ const float *syn_track(int t, int side)
     return side ? trk_r[t] : trk_l[t];
 }
 
-void syn_set_insert(int t, syn_insert_fn fn)
-{
-    if (t >= 1 && t < SYN_TRACKS) {
-        trk_insert[t] = fn;
-        trk_idle[t] = 0;
-    }
-}
-
 /* (GhettoMachine 0.5: the mix runs from RAM, gm_ram.h, with the tracks' gains read once a block: the stores into the
  * float buffers may alias them for all the compiler knows, so it read them again every sample) */
 GM_RAM void syn_mix_repack(float *l, float *r, float *rev, float *dly)
@@ -1370,26 +1317,53 @@ GM_RAM void syn_mix_repack(float *l, float *r, float *rev, float *dly)
     int k, t;
     for (k = 0; k < SYN_CTL; k++)
         l[k] = r[k] = rev[k] = dly[k] = 0.0f;
-    for (t = 1; t < SYN_TRACKS; t++)
+    for (t = 1; t < SYN_TRACKS; t++) {
+        /* a held VERB SPLASH / DELAY THROW (syn_perform): the send raised toward PF_SEND_TOP by the boost, ramped a
+         * sample at a time; let go, back to the track's own (as it is now) */
+        const float rb0 = mix[t].rb, db0 = mix[t].db;
+        float rb1 = rb0, db1 = db0;
+        if (rb1 != mix[t].rb_to)
+            rb1 = mix[t].rb_to > rb1 ? (rb1 + PF_SEND_STEP < mix[t].rb_to ? rb1 + PF_SEND_STEP : mix[t].rb_to)
+                                     : (rb1 - PF_SEND_STEP > mix[t].rb_to ? rb1 - PF_SEND_STEP : mix[t].rb_to);
+        if (db1 != mix[t].db_to)
+            db1 = mix[t].db_to > db1 ? (db1 + PF_SEND_STEP < mix[t].db_to ? db1 + PF_SEND_STEP : mix[t].db_to)
+                                     : (db1 - PF_SEND_STEP > mix[t].db_to ? db1 - PF_SEND_STEP : mix[t].db_to);
+        mix[t].rb = rb1;
+        mix[t].db = db1;
         if (trk_used >> t & 1u) {
             const float rs = mix[t].rs * (1.f/36000.f), ds = mix[t].ds * (1.f/36000.f);
             const float *tl = trk_l[t], *tr = trk_r[t], *ts = trk_send[t];
-            for (k = 0; k < SYN_CTL; k++) {
-                l[k] += tl[k];
-                r[k] += tr[k];
-                rev[k] += ts[k] * rs;
-                dly[k] += ts[k] * ds;
+            if (rb0 == 0.0f && rb1 == 0.0f && db0 == 0.0f && db1 == 0.0f) {   /* (no move: as it always was) */
+                for (k = 0; k < SYN_CTL; k++) {
+                    l[k] += tl[k];
+                    r[k] += tr[k];
+                    rev[k] += ts[k] * rs;
+                    dly[k] += ts[k] * ds;
+                }
+            } else {
+                const float rtop = (mix[t].rs > PF_SEND_TOP ? mix[t].rs : PF_SEND_TOP) * (1.f/36000.f) - rs;
+                const float dtop = (mix[t].ds > PF_SEND_TOP ? mix[t].ds : PF_SEND_TOP) * (1.f/36000.f) - ds;
+                const float rstep = (rb1 - rb0) * (1.f / (float)SYN_CTL), dstep = (db1 - db0) * (1.f / (float)SYN_CTL);
+                float rb = rb0, db = db0;
+                for (k = 0; k < SYN_CTL; k++) {
+                    rb += rstep;
+                    db += dstep;
+                    l[k] += tl[k];
+                    r[k] += tr[k];
+                    rev[k] += ts[k] * (rs + rtop * rb);
+                    dly[k] += ts[k] * (ds + dtop * db);
+                }
             }
         }
+    }
 }
 
 /* The tracks' voices (the halves' sums: centred voices in acc_m, unison voices off the centre in acc_l / acc_r) into
- * each track's block, through its insert, its pan and its sends' feed, then the mix. A track with no voice this block
- * and no insert is left out; so is one whose insert said it sleeps on silence (trk_idle). The usual track has only
- * centred voices: one sum and one conversion a sample, its peak taken as a whole number and scaled once (the same
- * value: scaling by a gain that is not negative keeps the order). The same samples as the loop this replaced.
- * A track at a time (syn_mix_track), so the tracks can be shared between the two cores: each track's buffers, its
- * insert's state and its meters are its own; syn_mix_end then makes the mix of them */
+ * each track's block, through its pan and its sends' feed, then the mix. A track with no voice this block is left
+ * out. The usual track has only centred voices: one sum and one conversion a sample, its peak taken as a whole number
+ * and scaled once (the same value: scaling by a gain that is not negative keeps the order).
+ * A track at a time (syn_mix_track), so the tracks can be shared between the two cores: each track's buffers and its
+ * meters are its own; syn_mix_end then makes the mix of them */
 GM_RAM void syn_mix_track(int t)
 {
     static const int32_t NONE[SYN_CTL];
@@ -1398,33 +1372,25 @@ GM_RAM void syn_mix_track(int t)
     trk_on[t] = 0;
     do {
         const int m0 = used_m[0][t], m1 = used_m[1][t], s0 = used_lr[0][t], s1 = used_lr[1][t];
-        const syn_insert_fn fn = trk_insert[t];
         const float pl = mix[t].pl * g, pr = mix[t].pr * g;
         const int32_t *a0 = m0 ? acc_m[0][t] : NONE, *a1 = m1 ? acc_m[1][t] : NONE;
         float *tl = trk_l[t], *tr = trk_r[t], *ts = trk_send[t];
         float pk = trk_pk[t];
-        if (m0 | m1 | s0 | s1)
-            trk_idle[t] = 0;
-        else if (!fn || trk_idle[t])
+        if (!(m0 | m1 | s0 | s1))
             continue;
         trk_on[t] = 1;
         if (s0 | s1) {                    /* unison voices off the centre too */
             const int32_t *l0 = s0 ? acc_l[0][t] : NONE, *l1 = s1 ? acc_l[1][t] : NONE;
             const int32_t *r0 = s0 ? acc_r[0][t] : NONE, *r1 = s1 ? acc_r[1][t] : NONE;
-            const float gl = fn ? g : pl, gr = fn ? g : pr;
             for (k = 0; k < SYN_CTL; k++) {
                 float m = (float)(a0[k] + a1[k]);
                 float ul = (float)(l0[k] + l1[k]);
                 float ur = (float)(r0[k] + r1[k]);
-                tl[k] = (m + ul) * gl;
-                tr[k] = (m + ur) * gr;
-                if (!fn)
-                    ts[k] = m + 0.5f * (ul + ur);
+                tl[k] = (m + ul) * pl;
+                tr[k] = (m + ur) * pr;
+                ts[k] = m + 0.5f * (ul + ur);
             }
-        } else if (fn) {                  /* centred voices into an insert: one signal, both sides */
-            for (k = 0; k < SYN_CTL; k++)
-                tl[k] = tr[k] = (float)(a0[k] + a1[k]) * g;
-        } else {                          /* centred voices, no insert: panned, the sends' feed, the peak */
+        } else {                          /* centered voices: pan, sends and peak */
             int32_t top = 0;
             for (k = 0; k < SYN_CTL; k++) {
                 int32_t v = a0[k] + a1[k];
@@ -1443,19 +1409,6 @@ GM_RAM void syn_mix_track(int t)
             }
             trk_pk[t] = pk;
             continue;
-        }
-        if (fn) {
-            const float gl = mix[t].pl, gr = mix[t].pr;
-            if (fn(t, tl, tr, SYN_CTL) && !(m0 | m1 | s0 | s1)) {   /* asleep on silence: left out from here */
-                trk_idle[t] = 1;
-                trk_on[t] = 0;
-                continue;
-            }
-            for (k = 0; k < SYN_CTL; k++) {
-                ts[k] = (tl[k] + tr[k]) * (0.5f * 36000.f);
-                tl[k] *= gl;
-                tr[k] *= gr;
-            }
         }
         for (k = 0; k < SYN_CTL; k++) {
             float a = tl[k], b = tr[k];
